@@ -1,0 +1,187 @@
+\section{Design}
+
+\subsection{System Modeling}
+
+\subsubsection{Context Model}
+
+The context model should show the system boundary of Francais.vn and its external actors/services. The main actors are Guest, Learner, and Admin. External systems include Supabase Auth, Supabase PostgreSQL, Supabase Storage, Strapi CMS, PostHog, Sentry, email provider, and Vercel hosting.
+
+\placeholderfigure{Context Model}{Insert context diagram showing Guest, Learner, Admin, Francais.vn Web App, Supabase, Strapi, PostHog, Sentry, Email Service, and Vercel.}
+
+\subsubsection{UML Class Diagram}
+
+The class diagram should model the main domain entities and relationships: User, UserGoal, Level, TopicGroup, Lesson, Exercise, Question, ExerciseAttempt, ExerciseAttemptAnswer, Progress, Note, Bookmark, Dictation, DictationAttempt, and Shadowing.
+
+\placeholderfigure{UML Class Diagram}{Insert UML class diagram for the learning domain, progress tracking, note system, exercise attempts, and content management entities.}
+
+\subsubsection{Sequence Diagrams}
+
+The report should include the following sequence diagrams:
+
+\begin{itemize}[leftmargin=*]
+  \item Guest Trial to Register and merge progress.
+  \item Learner opens lesson, completes exercise, and updates progress.
+  \item Admin creates lesson/exercise, previews content, publishes, and learner sees published content.
+\end{itemize}
+
+\placeholderfigure{Sequence Diagram: Guest Trial to Register}{Insert sequence diagram for Landing, Guest Dashboard, Sample Lesson, Sample Exercise, Sign Up, Auth Service, Progress Service, and Database.}
+\placeholderfigure{Sequence Diagram: Lesson to Exercise Progress}{Insert sequence diagram for Learner, Next.js UI, Lesson Service, Exercise Service, Progress Service, Database, and Analytics.}
+\placeholderfigure{Sequence Diagram: Admin Publish Content}{Insert sequence diagram for Admin, Admin CMS, Strapi, Storage, Database, and Learner UI.}
+
+\subsubsection{Generalization Hierarchy}
+
+This diagram is optional but useful for presenting a high-level abstraction. Suggested hierarchy:
+
+\begin{itemize}[leftmargin=*]
+  \item User: Guest, Learner, Admin.
+  \item LearningContent: Lesson, Exercise, Dictation, Shadowing.
+  \item PracticeAttempt: ExerciseAttempt, DictationAttempt.
+\end{itemize}
+
+\placeholderfigure{Generalization Hierarchy}{Optional. Insert overview inheritance/generalization diagram for users, learning content, and practice attempts.}
+
+\subsubsection{State Diagrams}
+
+Recommended state diagrams:
+
+\begin{itemize}[leftmargin=*]
+  \item Lesson Progress: not\_started, in\_progress, completed.
+  \item Content Publishing: draft, published, unpublished.
+  \item Auth Session: anonymous, guest, registering, authenticated, expired/logout.
+\end{itemize}
+
+\placeholderfigure{State Diagram: Lesson Progress}{Insert state diagram for not\_started, in\_progress, completed, and admin unpublish behavior.}
+\placeholderfigure{State Diagram: Content Publishing}{Insert state diagram for draft, published, unpublished, and soft delete behavior.}
+\placeholderfigure{State Diagram: Auth Session}{Insert state diagram for anonymous, guest, registering, authenticated, expired, and logout.}
+
+\subsubsection{Activity Diagrams}
+
+Recommended activity diagrams:
+
+\begin{itemize}[leftmargin=*]
+  \item Guest trial activity: Landing, guest dashboard, sample lesson, sample exercise, register prompt, register or continue guest.
+  \item Learner activity: Dashboard, recommended lesson, lesson detail, exercise, result, mark completed, next lesson.
+  \item Admin activity: Login, create content, preview, publish, learner-side visibility.
+\end{itemize}
+
+\placeholderfigure{Activity Diagram: Guest Trial}{Insert guest trial activity diagram.}
+\placeholderfigure{Activity Diagram: Core Learning Loop}{Insert learner learning activity diagram.}
+\placeholderfigure{Activity Diagram: Admin Content Publishing}{Insert admin content creation and publishing activity diagram.}
+
+\subsection{Architectural Design}
+
+\subsubsection{Architecture Decision}
+
+Francais.vn should be described as a client-server web application organized internally using layered architecture and MVC principles. The repository pattern is used for data access abstraction. Pipe-and-filter is not the primary architecture, but it can be used locally for text comparison in Fill-in-the-blank and Dictation. Data processing architecture is also not the main architecture; the product is primarily an interactive learning web application.
+
+\paragraph{Recommended Architecture Summary.}
+\begin{itemize}[leftmargin=*]
+  \item Overall deployment style: Client-server.
+  \item Internal organization: Layered architecture.
+  \item Presentation pattern: MVC principles.
+  \item Data access pattern: Repository pattern.
+  \item Local processing pipeline: Pipe-and-filter for text normalization, tokenization, diff, and accuracy calculation.
+\end{itemize}
+
+\placeholderfigure{Architectural Overview}{Insert architecture diagram showing browser client, Next.js application, service layer, repository/data access layer, Supabase, Strapi, Storage, Analytics, and Email Service.}
+
+\subsubsection{Client-Server Architecture}
+
+The browser is the client. It renders the learner, guest, and admin-facing web interfaces. The server-side part of the application handles protected routes, API calls, authentication integration, business rules, progress tracking, and data access. External managed services provide authentication, storage, database, CMS, analytics, and error monitoring.
+
+\subsubsection{MVC View}
+
+\begin{itemize}[leftmargin=*]
+  \item Model: User, Lesson, Exercise, Question, Progress, Note, Dictation, Bookmark, UserGoal, and attempt entities.
+  \item View: Dashboard, Learning Path, Lesson Detail, Exercise, Dictation, Notes Page, Guest Dashboard, Admin CMS screens.
+  \item Controller: Next.js routes, API handlers, server actions, auth guards, form handlers, and service method calls.
+\end{itemize}
+
+\subsubsection{Layered Architecture}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X}
+\toprule
+Layer & Responsibility \\
+\midrule
+Presentation Layer & React/Next.js pages, components, layout, forms, UI states. \\
+Controller/API Layer & Route handlers, request validation, authentication checks, response mapping. \\
+Application Service Layer & AuthService, ProgressService, LessonService, ExerciseService, NoteService, GuestTrialService, DictationService. \\
+Domain Layer & Business rules for progress, exercise scoring, guest limits, note visibility, content publishing. \\
+Repository/Data Access Layer & UserRepository, LessonRepository, ProgressRepository, NoteRepository, AttemptRepository. \\
+Data Layer & Supabase PostgreSQL, Supabase Storage, Strapi CMS. \\
+\bottomrule
+\end{tabularx}
+\caption{Layered architecture}
+\end{table}
+
+\subsubsection{Repository Architecture}
+
+The repository pattern isolates data access from business logic. This is important because the application reads data from multiple sources: Supabase PostgreSQL for user progress and attempts, Strapi for content management, and Supabase Storage for audio files. Services should depend on repository interfaces instead of direct database calls.
+
+\subsubsection{Pipe-and-Filter for Text Comparison}
+
+Pipe-and-filter is used only inside text comparison features.
+
+\begin{center}
+\texttt{Input Text -> Normalize -> Tokenize -> Compare -> Diff Highlight -> Accuracy Result}
+\end{center}
+
+This applies to Fill-in-the-blank and Dictation, where the system must lowercase text, normalize whitespace, keep French accents, handle apostrophe variants, preserve hyphens, compare tokens, and calculate accuracy.
+
+\subsection{Database Models}
+
+The database model is centered around users, content, learning progress, attempts, notes, bookmarks, and goals.
+
+\begin{longtable}{p{0.22\linewidth} p{0.66\linewidth}}
+\caption{Database model summary}\\
+\toprule
+Entity & Main Fields \\
+\midrule
+\endhead
+USER & id, email, password\_hash, role, created\_at, last\_login \\
+LEVEL & id, order \\
+TOPIC\_GROUP & id, level\_id, name\_vi, order \\
+LESSON & id, topic\_group\_id, title, content\_md, order, status, published\_at, is\_sample \\
+EXERCISE & id, lesson\_id, status \\
+QUESTION & id, exercise\_id, type, payload, explanation \\
+PROGRESS & user\_id, lesson\_id, state, last\_visited, completed\_at \\
+EXERCISE\_ATTEMPT & id, user\_id, exercise\_id, score, total, duration\_sec, submitted\_at \\
+EXERCISE\_ATTEMPT\_ANSWER & id, attempt\_id, question\_id, answer, is\_correct \\
+DICTATION & id, lesson\_id, audio\_url, transcript, duration\_sec \\
+DICTATION\_ATTEMPT & id, user\_id, dictation\_id, user\_input, accuracy, submitted\_at \\
+NOTE & id, user\_id, lesson\_id, title, body\_md, created\_at, updated\_at \\
+BOOKMARK & user\_id, target\_type, target\_id, created\_at \\
+USER\_GOAL & user\_id, goal, exam\_date \\
+\bottomrule
+\end{longtable}
+
+\placeholderfigure{Entity Relationship Diagram}{Insert ERD showing relationships between users, content, progress, attempts, notes, bookmarks, and goals.}
+
+\subsection{Core User Flow Models}
+
+\subsubsection{Guest Trial to Registration}
+
+The guest enters from the landing page, opens the guest dashboard, studies one sample lesson, completes one sample exercise, and receives a registration prompt. If the guest registers, local trial progress is migrated into the authenticated account.
+
+\placeholderfigure{Core User Flow: Guest Trial}{Insert user flow diagram for guest trial and registration conversion.}
+
+\subsubsection{Returning Learner Flow}
+
+The learner lands on the dashboard, sees the current or next recommended lesson, opens Lesson Detail, optionally resumes scroll position, completes an exercise, updates progress, and returns to the dashboard or continues to the next lesson.
+
+\placeholderfigure{Core User Flow: Returning Learner}{Insert user flow diagram for dashboard, lesson, exercise, progress update, and next lesson.}
+
+\subsubsection{Quick Note Flow}
+
+The learner clicks the floating Quick Note button in a lesson, exercise, dictation, or shadowing screen. The system opens a slide-over panel, allows creating or selecting a note, autosaves after editing, and syncs the note to the Notes Page.
+
+\placeholderfigure{Core User Flow: Quick Note}{Insert user flow diagram for floating note panel, create/select note, autosave, and Notes Page sync.}
+
+\subsubsection{Admin Content Flow}
+
+The admin logs into the admin area, creates or edits a lesson, attaches exercises or dictation content, previews the learner view, publishes the content, and the published content becomes visible in Learning Path and Lesson Detail.
+
+\placeholderfigure{Core User Flow: Admin CMS}{Insert user flow diagram for admin content creation and publishing.}
+

@@ -1,0 +1,98 @@
+\section{Sprint Plan}
+
+\subsection{Sprint Overview}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{c X X X}
+\toprule
+Sprint & Theme & Outcome & Demo-able \\
+\midrule
+1 & Core Learning Loop & Register, dashboard, lesson, exercise, progress & Internal alpha \\
+2 & Notes, Dictation, Funnel & Quick Note, Notes Page, Dictation, Guest Trial, OAuth, Bookmark, Onboarding & Closed beta \\
+3 & Retention and Skill Practice & Shadowing, Saved Mistakes, Streak, polish & Public MVP launch \\
+4+ & Exam Preparation & Mock Test, Timer, Placement Test & Phase 2 \\
+\bottomrule
+\end{tabularx}
+\caption{Sprint overview}
+\end{table}
+
+\subsection{Sprint 1: Core Learning Loop}
+
+The goal of Sprint 1 is to deliver the learner happy path with email authentication and admin content creation.
+
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.42\linewidth} p{0.12\linewidth} p{0.1\linewidth}}
+\caption{Sprint 1 backlog}\\
+\toprule
+\# & Epic & Story & Estimate & Owner \\
+\midrule
+\endhead
+S1-01 & Auth & Register and login with email/password & 5 & BE \\
+S1-02 & Auth & Reset password flow & 3 & BE \\
+S1-03 & Auth & Logout and session expiry & 2 & FE \\
+S1-04 & Auth & Separate admin login & 3 & BE \\
+S1-05 & Data & Schema for user, lesson, exercise, question, progress, attempts & 5 & BE \\
+S1-06 & Data & Seed 5 lessons and 5 exercises & 2 & BE \\
+S1-07 & Admin & CRUD lesson with editor and preview & 8 & BE+FE \\
+S1-08 & Admin & CRUD exercise: MC, true/false, fill & 8 & BE+FE \\
+S1-09 & Admin & Publish/unpublish state machine & 3 & BE \\
+S1-10 & Admin & Level, topic group, reorder management & 5 & BE+FE \\
+S1-11 & Dashboard & Continue learning card states & 5 & FE \\
+S1-12 & Dashboard & Basic progress and links & 3 & FE \\
+S1-13 & Learning Path & Show grouped lessons and statuses & 8 & FE \\
+S1-14 & Learning Path & Highlight next lesson and allow free navigation & 3 & FE \\
+S1-15 & Lesson & Markdown, callouts, CTAs & 5 & FE \\
+S1-16 & Lesson & Auto-mark in-progress, breadcrumb, responsive layout & 3 & FE \\
+S1-17 & Exercise & Render MC, true/false, fill & 5 & FE \\
+S1-18 & Exercise & Feedback, result, retry & 5 & FE+BE \\
+S1-19 & Exercise & Fill compare rules & 3 & BE \\
+S1-20 & Progress & Save lesson state, attempts, level percentage & 5 & BE \\
+S1-21 & Infra & Vercel, Supabase, Strapi setup & 5 & BE \\
+S1-22 & Infra & Sentry and analytics scaffolding & 3 & BE \\
+S1-23 & QA & E2E happy path & 3 & QA \\
+\bottomrule
+\end{longtable}
+
+\subsection{Sprint 2: Notes, Dictation, and Funnel}
+
+The goal of Sprint 2 is to enable the product differentiators and conversion funnel.
+
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.42\linewidth} p{0.12\linewidth} p{0.1\linewidth}}
+\caption{Sprint 2 backlog}\\
+\toprule
+\# & Epic & Story & Estimate & Owner \\
+\midrule
+\endhead
+S2-01 & Auth & Google OAuth & 5 & BE \\
+S2-02 & Guest Trial & Landing CTA and guest dashboard & 5 & FE \\
+S2-03 & Guest Trial & Guest lesson and sample exercise & 5 & FE \\
+S2-04 & Guest Trial & Soft banner and hard modal limit & 5 & FE \\
+S2-05 & Guest Trial & Local progress and merge on register & 5 & BE+FE \\
+S2-06 & Guest Trial & CMS sample flag & 2 & BE \\
+S2-07 & Quick Note & Floating button and slide-over & 5 & FE \\
+S2-08 & Quick Note & CRUD notes and lesson linking & 5 & FE+BE \\
+S2-09 & Quick Note & Autosave and basic rich text & 5 & FE \\
+S2-10 & Quick Note & Hide note in mock test placeholder & 2 & FE \\
+S2-11 & Notes Page & List, search, filter by lesson & 5 & FE+BE \\
+S2-12 & Dictation & Schema, admin CRUD, audio upload & 8 & BE+FE \\
+S2-13 & Dictation & Learner audio player and input UI & 5 & FE \\
+S2-14 & Dictation & Token diff, highlight, result & 8 & BE+FE \\
+S2-15 & Dictation & Save attempt and progress update & 3 & BE \\
+S2-16 & Bookmark & Bookmark lesson/question and Saved Items page & 5 & FE+BE \\
+S2-17 & Onboarding & Goal modal and user goal schema & 5 & FE+BE \\
+S2-18 & Countdown & Exam date and dashboard card & 3 & FE+BE \\
+S2-19 & Dashboard & Recent activity and Saved Items link & 3 & FE \\
+S2-20 & QA & E2E guest to register, note, dictation & 3 & QA \\
+\bottomrule
+\end{longtable}
+
+\subsection{Sprint 3 and Phase 2}
+
+Sprint 3 focuses on Shadowing, Saved Mistakes, Streak, performance, accessibility, SEO, error states, analytics, content production, regression testing, and public launch preparation. Phase 2 includes mock tests, real exam timer, placement test, AI correction, payment, and community features after MVP validation.
+
+\subsection{Critical Path and Risks}
+
+The critical path begins with the database schema and content management model. Admin lesson creation enables the learning path, lesson UI, exercise flow, and progress tracking. Dictation depends on the audio upload pattern established in admin content management. Shadowing depends on the audio and browser media patterns validated in Sprint 2.
+
+Major risks include unresolved technology stack decisions, audio upload complexity, MediaRecorder compatibility on iOS Safari, slow content production, and confusing text comparison rules for dictation.
+

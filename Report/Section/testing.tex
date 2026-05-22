@@ -1,0 +1,68 @@
+\section{Testing}
+
+This section will be completed after implementation. The testing plan should verify functional requirements, non-functional requirements, acceptance criteria, and sprint Definition of Done.
+
+\subsection{Priority Matrix Checklist}
+
+\begin{longtable}{p{0.34\linewidth} p{0.16\linewidth} p{0.18\linewidth} p{0.2\linewidth}}
+\caption{Feature completion checklist}\\
+\toprule
+Feature & Priority & Status & Evidence \\
+\midrule
+\endhead
+Authentication & Must & Not started & -- \\
+Guest Trial & Must & Not started & -- \\
+Dashboard & Must & Not started & -- \\
+Learning Path & Must & Not started & -- \\
+Lesson Detail & Must & Not started & -- \\
+Exercise & Must & Not started & -- \\
+Progress Tracking & Must & Not started & -- \\
+Quick Note and Notes Page & Must & Not started & -- \\
+Admin CMS & Must & Not started & -- \\
+Dictation Practice & Must & Not started & -- \\
+Google OAuth & Should & Not started & -- \\
+Bookmark / Saved Items & Should & Not started & -- \\
+Onboarding & Should & Not started & -- \\
+Countdown & Should & Not started & -- \\
+Saved Mistakes & Could & Not started & -- \\
+Shadowing & Could & Not started & -- \\
+Streak & Could & Not started & -- \\
+\bottomrule
+\end{longtable}
+
+\subsection{Testing Strategy}
+
+\begin{itemize}[leftmargin=*]
+  \item Unit testing: compare rules, progress calculation, service-layer business logic, validation helpers.
+  \item Integration testing: authentication flow, lesson/exercise submission, note autosave, guest progress merge.
+  \item End-to-end testing: register to dashboard to lesson to exercise to progress update; guest to register; note creation; dictation submission.
+  \item UI testing: responsive layout at 320px, iPhone SE, iPhone 12, desktop, and keyboard navigation.
+  \item Non-functional testing: Lighthouse performance, accessibility contrast, basic security checks, file upload constraints.
+\end{itemize}
+
+\subsection{Sample Test Cases}
+
+\begin{longtable}{p{0.12\linewidth} p{0.26\linewidth} p{0.28\linewidth} p{0.22\linewidth}}
+\caption{Sample test cases}\\
+\toprule
+ID & Scenario & Steps & Expected Result \\
+\midrule
+\endhead
+TC-01 & Register with valid email/password & Open sign up, enter valid credentials, submit & Account created and user lands on dashboard. \\
+TC-02 & Login rate limit & Enter wrong password five times within 15 minutes & IP is temporarily blocked and generic error is shown. \\
+TC-03 & New learner recommendation & Register new account and open dashboard & Dashboard recommends first lesson in Khởi đầu. \\
+TC-04 & Complete lesson & Open lesson, click complete & Progress becomes completed and dashboard updates within one second. \\
+TC-05 & Exercise feedback & Submit wrong and correct answers & Inline feedback displays correct state, answer, and explanation. \\
+TC-06 & Fill accent rule & Answer \texttt{e} when correct answer is \texttt{é} & Answer is marked incorrect because accents are preserved. \\
+TC-07 & Guest limit & Complete sample lesson and try second lesson & Registration modal appears. \\
+TC-08 & Guest progress migration & Complete guest exercise, register & Guest progress is merged into account. \\
+TC-09 & Quick Note autosave & Create note, type content, wait one second & Note is saved and visible on Notes Page. \\
+TC-10 & Dictation diff & Submit transcript with missing/wrong tokens & Token-level diff and accuracy are shown. \\
+TC-11 & Admin publish lesson & Create draft lesson and publish & Lesson appears in Learning Path. \\
+TC-12 & Audio upload validation & Upload non-MP3 or file larger than 2MB & Upload is rejected with clear error. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Testing Evidence Placeholder}
+
+\placeholderfigure{Test Result Summary}{Insert test result screenshot, coverage table, or CI output after implementation.}

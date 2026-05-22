@@ -1,0 +1,73 @@
+\documentclass{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T5,T1]{fontenc}
+\else
+  \usepackage{fontspec}
+\fi
+
+\IfFileExists{neurips_2026.sty}{
+  \usepackage[preprint]{neurips_2026}
+}{
+  \usepackage[margin=1in]{geometry}
+}
+
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{float}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\newcommand{\placeholderfigure}[2]{
+  \begin{figure}[H]
+    \centering
+    \fbox{
+      \begin{minipage}[c][0.18\textheight][c]{0.9\linewidth}
+        \centering
+        \textbf{Placeholder: #1}\\[0.5em]
+        #2
+      \end{minipage}
+    }
+    \caption{#1}
+  \end{figure}
+}
+
+\title{Francais.vn Software Engineering Project Report}
+
+\author{
+  Project Team\\
+  Francais.vn\\
+  \texttt{francais.vn}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Francais.vn is a mobile-first web platform for Vietnamese learners studying French. The MVP focuses on a clear learning path, lesson-based exercises, progress tracking, quick note-taking, guest trial conversion, and an admin CMS for content operation. This report consolidates the software requirements specification, sprint plan, system design, architectural design, database model, user flow model, and placeholders for implementation and testing evidence.
+\end{abstract}
+
+\tableofcontents
+
+\input{Section/srs}
+\input{Section/sprint_plan}
+\input{Section/design}
+\input{Section/implementation}
+\input{Section/testing}
+
+\end{document}

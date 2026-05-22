@@ -1,0 +1,202 @@
+\section{Software Requirements Specification}
+
+\subsection{Introduction}
+
+\subsubsection{Product Overview}
+
+Francais.vn is a self-learning French platform for Vietnamese learners. The MVP provides a beginner-to-A1 learning path, micro-exercises, dictation practice, note-taking while studying, and later support for exam preparation. The product is mobile-first and web-only during the MVP stage.
+
+\paragraph{Elevator Pitch.}
+Francais.vn is a French self-study platform for Vietnamese users. It helps learners follow a clear learning path from the beginning to A1 level, practice through micro-exercises and dictation, take quick notes during lessons, and prepare for certificate-oriented learning after the MVP.
+
+\paragraph{Vision.}
+The long-term vision is to become the leading French self-learning platform for Vietnamese learners by combining structured learning paths, personalized progress, exam-oriented learning, and a lightweight note-taking experience.
+
+\paragraph{Strategic Pillars.}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{c X X}
+\toprule
+\# & Pillar & Rationale \\
+\midrule
+1 & Clear learning path & Beginners always know what to learn next. \\
+2 & Active learning through exercises & Exercises and dictation reduce passive reading. \\
+3 & Quick Note & Learners can take notes inside the learning flow. \\
+4 & Guest trial before login wall & Users can experience value before registering. \\
+5 & Self-operating admin CMS & The founder can create and publish content without developer support. \\
+\bottomrule
+\end{tabularx}
+\caption{Strategic pillars of the MVP}
+\end{table}
+
+\paragraph{Target Audience.}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X X}
+\toprule
+Persona & MVP Scope & Channel \\
+\midrule
+Foundation learner & Primary audience: students and beginners learning A1 & SEO, social media \\
+Fast exam learner & Secondary audience: DELF/TEF/TCF learners, PR Canada users & SEO for exam keywords \\
+Admin/founder & Internal user who creates and publishes content & CMS web interface \\
+\bottomrule
+\end{tabularx}
+\caption{Target audience}
+\end{table}
+
+\paragraph{MVP Success Metrics.}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X X}
+\toprule
+Metric & Target & Measurement \\
+\midrule
+Registered users & At least 50 & Analytics \\
+Guest to register conversion & At least 20\% & Funnel event \\
+First lesson completion rate & At least 60\% & Progress event \\
+D7 retention & At least 30\% & Analytics \\
+Published lessons before launch & At least 20 & CMS count \\
+Quick Note adoption & At least 25\% create one note & Database count \\
+\bottomrule
+\end{tabularx}
+\caption{MVP success metrics}
+\end{table}
+
+\subsection{Overall Description}
+
+\subsubsection{Personas}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X X X}
+\toprule
+Persona & Goal & Main Pain Point & MVP Need \\
+\midrule
+Lan, 22, student & Build A1 foundation before studying abroad & Learns randomly and loses motivation & Learning path, exercises, progress, Quick Note \\
+Minh, 28, office worker & Prepare for DELF B1 in three months & Does not know whether his level meets the target & Exam countdown, later mock tests \\
+Phuon, founder/admin & Create and publish learning content & Needs a simple CMS without developer dependency & Lesson, exercise, dictation CRUD and publishing workflow \\
+\bottomrule
+\end{tabularx}
+\caption{Personas}
+\end{table}
+
+\subsubsection{MVP Scope and Feature Priority}
+
+\begin{longtable}{p{0.34\linewidth} p{0.16\linewidth} p{0.14\linewidth} p{0.26\linewidth}}
+\caption{MVP feature priority matrix}\\
+\toprule
+Feature & Priority & Sprint & Note \\
+\midrule
+\endhead
+Email/password authentication & Must & 1 & Persistent 30-day session \\
+Guest Trial Flow & Must & 1--2 & Trial before registration; sprint allocation should be finalized \\
+Dashboard & Must & 1 & ``Continue learning'' card is the center piece \\
+Learning Path & Must & 1 & Free navigation, no locked lessons \\
+Lesson Detail & Must & 1 & Mobile-first reading experience \\
+Exercise: MC, true/false, fill & Must & 1 & Immediate feedback and retry \\
+Progress Tracking & Must & 1 & Backbone of Dashboard and Learning Path \\
+Quick Note and Notes Page & Must & 1--2 & Floating note button and full notes page \\
+Admin CMS: Lesson, Exercise, Publish & Must & 1--2 & One admin, no RBAC in MVP \\
+Dictation Practice & Must & 2 & Audio and transcript comparison \\
+Google OAuth & Should & 2 & Reduce signup friction \\
+Bookmark / Saved Items & Should & 2 & Improve retention \\
+Onboarding goal selection & Should & 2 & Goal: start from zero, review A1, exam prep \\
+Exam countdown & Should & 2 & Supports exam-oriented persona \\
+Saved Mistakes & Could & 3 & After exercise flow stabilizes \\
+Shadowing Practice & Could & 3 & Recording and replay, no AI \\
+Streak & Could & 3 & Retention feature after progress is stable \\
+Mock Test and Timer & Later & 4+ & Post-MVP exam prep \\
+AI correction, payment, community, placement test & Later & -- & Out of MVP scope \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Out of Scope}
+
+Payment, AI grading, community features, native mobile applications, placement tests, full mock tests with timers, multi-admin RBAC, push notifications, and email drip campaigns are outside the MVP.
+
+\subsection{User and System Requirements}
+
+\subsubsection{Functional Requirements}
+
+The following functional requirements are consolidated from the feature specification.
+
+\begin{longtable}{p{0.18\linewidth} p{0.27\linewidth} p{0.43\linewidth}}
+\caption{Functional requirements summary}\\
+\toprule
+Area & Requirement & Description \\
+\midrule
+\endhead
+Guest Trial & Trial without login & Users can enter a guest dashboard, open one sample lesson, complete one sample exercise, and receive a soft registration prompt. \\
+Guest Trial & Progress migration & Guest lesson view and exercise score are stored in local storage and merged into the account after registration. \\
+Authentication & Email/password login & Users can register and log in with email and password. Password requires at least eight characters and one digit. \\
+Authentication & Session management & JWT session persists for 30 days with logout, reset password, refresh behavior, and rate limiting. \\
+Dashboard & Continue learning & The dashboard recommends the unfinished lesson, the next lesson, or the first lesson for new users. \\
+Learning Path & Level and topic grouping & Lessons are organized by level and topic group with visible progress and lesson status. \\
+Lesson Detail & Markdown lesson rendering & Lessons render headings, rich content, note callouts, warning callouts, audio examples, breadcrumbs, and CTAs. \\
+Exercise & Three question types & Multiple choice, true/false, and fill-in-the-blank questions are supported. \\
+Exercise & Feedback and retry & Users receive immediate feedback, final score, wrong-answer list, and can retry exercises. \\
+Progress & Learning state & The system stores not-started, in-progress, and completed states per user and lesson. \\
+Quick Note & Floating note panel & Users can create, edit, delete, and autosave notes from lessons, exercises, dictation, and shadowing screens. \\
+Notes Page & Search and filter & Users can list notes, search by title/body, filter by lesson, and edit notes in a full-page view. \\
+Dictation & Audio and transcript comparison & Users listen to short audio, type what they hear, and receive token-level diff and accuracy. \\
+Bookmark & Saved items & Users can bookmark lessons or questions and view them in a saved items page. \\
+Onboarding & Goal selection & Users can set a learning goal and optional exam date after registration. \\
+Admin CMS & Content operations & Admin can create, preview, publish, unpublish, and manage lessons, exercises, dictation, shadowing, and learning path order. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Non-Functional Requirements}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X X}
+\toprule
+ID & Requirement & Detail \\
+\midrule
+NFR-01 & Responsive UI & Mobile-first layout for width 320px and above. \\
+NFR-02 & Performance & LCP under 3 seconds on 3G; TTI under 5 seconds. \\
+NFR-03 & SEO & Landing page metadata, Open Graph tags, and sitemap. \\
+NFR-04 & Accessibility & Contrast ratio at least 4.5:1, body text at least 16px, keyboard navigation for exercises. \\
+NFR-05 & Security & HTTPS, JWT, input sanitization, CORS, and no PII in logs. \\
+NFR-06 & Backup & Daily database backup and audio storage versioning. \\
+NFR-07 & Browser support & Latest two versions of Chrome, Safari, and Firefox. \\
+NFR-08 & Audio constraints & MP3, maximum 2MB per file, maximum 30 seconds per dictation chunk. \\
+NFR-09 & Internationalization & Vietnamese UI in MVP; key-based i18n optional. \\
+NFR-10 & Observability & Sentry error logging and basic analytics events. \\
+\bottomrule
+\end{tabularx}
+\caption{Non-functional requirements}
+\end{table}
+
+\subsection{Use Cases and User Stories}
+
+\subsubsection{Primary Use Cases}
+
+\begin{longtable}{p{0.16\linewidth} p{0.2\linewidth} p{0.22\linewidth} p{0.3\linewidth}}
+\caption{Primary use cases}\\
+\toprule
+Use Case & Actor & Goal & Main Flow \\
+\midrule
+\endhead
+UC-01 Guest Trial & Guest & Try the product before registration & Landing page, guest dashboard, sample lesson, sample exercise, registration prompt. \\
+UC-02 Register/Login & Learner & Create account and access dashboard & Submit credentials or OAuth, validate session, redirect to dashboard. \\
+UC-03 Continue Learning & Learner & Resume or start the next lesson & Dashboard recommends lesson, user opens lesson, reads content, starts exercise. \\
+UC-04 Complete Exercise & Learner & Practice and receive feedback & Answer questions, submit, receive feedback, save attempt, update progress. \\
+UC-05 Take Quick Note & Learner & Save learning notes without leaving context & Open floating note panel, create/select note, edit, autosave. \\
+UC-06 Practice Dictation & Learner & Train listening comprehension & Play audio, type transcript, submit, view diff and accuracy. \\
+UC-07 Manage Content & Admin & Create and publish learning material & Login admin, create lesson/exercise, preview, publish. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Representative User Stories}
+
+\begin{itemize}[leftmargin=*]
+  \item As a guest, I want to try one lesson and one exercise before registering so that I can understand the product value.
+  \item As a new learner, I want the dashboard to suggest my first lesson so that I do not need to choose randomly.
+  \item As a returning learner, I want to continue the lesson I was studying so that I can resume quickly.
+  \item As a learner, I want immediate exercise feedback so that I can correct mistakes while the context is fresh.
+  \item As a learner, I want to take notes inside the lesson screen so that I do not need another tool while studying.
+  \item As an exam-oriented learner, I want to set my exam date so that the dashboard can show a countdown.
+  \item As an admin, I want to create and publish lessons without developer support so that content production can happen continuously.
+\end{itemize}
+
