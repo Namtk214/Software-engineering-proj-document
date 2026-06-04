@@ -1,67 +1,191 @@
 \section{Testing}
 
-This section will be completed after implementation. The testing plan should verify functional requirements, non-functional requirements, acceptance criteria, and sprint Definition of Done.
+This section covers two complementary testing tracks: \textbf{validation testing} (does each feature fulfil its requirement?) and \textbf{defect testing} (do known boundary conditions, edge cases, and implementation risks behave safely?). Defect tests were derived by reading the actual source code of the three server-side API routes (\texttt{/api/lesson/visit}, \texttt{/api/exercise/submit}, \texttt{/api/exercise/complete-scroll}), the \texttt{AuthGate} component, and the \texttt{gradeQuestion} function.
 
-\subsection{Priority Matrix Checklist}
+\subsection{Feature Completion Checklist}
 
-\begin{longtable}{p{0.34\linewidth} p{0.16\linewidth} p{0.18\linewidth} p{0.2\linewidth}}
-\caption{Feature completion checklist}\\
+\begin{longtable}{p{0.34\linewidth} p{0.14\linewidth} p{0.16\linewidth} p{0.24\linewidth}}
+\caption{Feature completion checklist (as of Phase 3)}\\
 \toprule
 Feature & Priority & Status & Evidence \\
 \midrule
 \endhead
-Authentication & Must & Not started & -- \\
-Guest Trial & Must & Not started & -- \\
-Dashboard & Must & Not started & -- \\
-Learning Path & Must & Not started & -- \\
-Lesson Detail & Must & Not started & -- \\
-Exercise & Must & Not started & -- \\
-Progress Tracking & Must & Not started & -- \\
-Quick Note and Notes Page & Must & Not started & -- \\
-Admin CMS & Must & Not started & -- \\
-Dictation Practice & Must & Not started & -- \\
-Google OAuth & Should & Not started & -- \\
-Bookmark / Saved Items & Should & Not started & -- \\
-Onboarding & Should & Not started & -- \\
-Countdown & Should & Not started & -- \\
-Saved Mistakes & Could & Not started & -- \\
-Shadowing & Could & Not started & -- \\
-Streak & Could & Not started & -- \\
+Email / password registration \& login & Must & Done & Payload REST auth, Resend email verify \\
+Google OAuth & Must & Done & Custom endpoints on Payload, JWT returned \\
+Email verification & Must & Done & /verify?token= page + Payload verify endpoint \\
+AuthGate (session guard) & Must & Done & Blocks (app) routes, spinner until /me resolves \\
+Dashboard (streak, heatmap, progress, reviews) & Must & Done & Computed from LessonProgress in real time \\
+Learning Path (level/unit/lesson, progress tags) & Must & Done & GraphQL query, real progressMap \\
+Lesson Detail (markdown, media, vocabulary) & Must & Done & GraphQL query, LessonBody \\
+Inline Exercise (4 types, server grading) & Must & Done & InlineExercise + /api/exercise/submit \\
+Lesson Visit Tracking (in\_progress) & Must & Done & LessonVisitTracker + /api/lesson/visit \\
+Scroll-based Completion & Must & Done & LessonCompletionBanner + /api/exercise/complete-scroll \\
+Admin CMS: Lesson, QuestionSet, Publish & Must & Done & Payload admin panel, draft/publish \\
+Admin CMS: Vocabulary, Media & Must & Done & Collections with uploads \\
+Vocabulary dictionary \& SRS flashcard & Should & UI done & localStorage only; backend pending \\
+Streak \& heatmap & Should & Done & Ebbinghaus + 84-day grid \\
+Goal setting & Should & UI done & localStorage; Learners collection fields pending \\
+Practice: Dictation & Should & Mock UI & Audio mock; no backend persistence \\
+Practice: Shadowing & Could & Mock UI & Recording UI only; Web Audio API pending \\
+Saved Items / Bookmarks & Could & Mock UI & Static mock data; no backend \\
+Quick Notes & Could & Mock UI & Slide-over panel; no backend persistence \\
+Lesson Discussion & Could & Mock & Static comments; no post/reply \\
+Chat Community & Later & Placeholder & ``Coming soon'' page \\
+AI Mode & Later & Placeholder & ``Coming soon'' page \\
 \bottomrule
 \end{longtable}
 
 \subsection{Testing Strategy}
 
 \begin{itemize}[leftmargin=*]
-  \item Unit testing: compare rules, progress calculation, service-layer business logic, validation helpers.
-  \item Integration testing: authentication flow, lesson/exercise submission, note autosave, guest progress merge.
-  \item End-to-end testing: register to dashboard to lesson to exercise to progress update; guest to register; note creation; dictation submission.
-  \item UI testing: responsive layout at 320px, iPhone SE, iPhone 12, desktop, and keyboard navigation.
-  \item Non-functional testing: Lighthouse performance, accessibility contrast, basic security checks, file upload constraints.
+  \item \textbf{Unit testing}: \texttt{gradeQuestion} grading logic for all four supported types; streak and heatmap calculation; Ebbinghaus interval logic; fill-blank normalisation rules.
+  \item \textbf{Integration testing}: Full auth flow (register $\rightarrow$ verify $\rightarrow$ login $\rightarrow$ /me); lesson visit $\rightarrow$ exercise submit $\rightarrow$ LessonProgress state transition; GraphQL content query with locale and depth.
+  \item \textbf{End-to-end testing}: Register to dashboard to lesson to exercise to progress update; scroll-complete for a reading-only lesson; admin create/publish lesson visible in learner path.
+  \item \textbf{Defect testing}: Boundary conditions, race conditions, malformed inputs, token handling edge cases, and access control bypass attempts derived directly from code inspection (see Section~\ref{sec:defect}).
+  \item \textbf{UI testing}: Responsive layout at 320\,px, iPhone SE, iPhone 12, and desktop; keyboard navigation through exercise cards.
+  \item \textbf{Non-functional testing}: Lighthouse performance and accessibility; CORS rejection from disallowed origins; file upload size constraint.
 \end{itemize}
 
-\subsection{Sample Test Cases}
+\subsection{Validation Test Cases}
 
-\begin{longtable}{p{0.12\linewidth} p{0.26\linewidth} p{0.28\linewidth} p{0.22\linewidth}}
-\caption{Sample test cases}\\
+\begin{longtable}{p{0.10\linewidth} p{0.26\linewidth} p{0.30\linewidth} p{0.22\linewidth}}
+\caption{Validation test cases (happy path)}\\
 \toprule
 ID & Scenario & Steps & Expected Result \\
 \midrule
 \endhead
-TC-01 & Register with valid email/password & Open sign up, enter valid credentials, submit & Account created and user lands on dashboard. \\
-TC-02 & Login rate limit & Enter wrong password five times within 15 minutes & IP is temporarily blocked and generic error is shown. \\
-TC-03 & New learner recommendation & Register new account and open dashboard & Dashboard recommends first lesson in Khởi đầu. \\
-TC-04 & Complete lesson & Open lesson, click complete & Progress becomes completed and dashboard updates within one second. \\
-TC-05 & Exercise feedback & Submit wrong and correct answers & Inline feedback displays correct state, answer, and explanation. \\
-TC-06 & Fill accent rule & Answer \texttt{e} when correct answer is \texttt{é} & Answer is marked incorrect because accents are preserved. \\
-TC-07 & Guest limit & Complete sample lesson and try second lesson & Registration modal appears. \\
-TC-08 & Guest progress migration & Complete guest exercise, register & Guest progress is merged into account. \\
-TC-09 & Quick Note autosave & Create note, type content, wait one second & Note is saved and visible on Notes Page. \\
-TC-10 & Dictation diff & Submit transcript with missing/wrong tokens & Token-level diff and accuracy are shown. \\
-TC-11 & Admin publish lesson & Create draft lesson and publish & Lesson appears in Learning Path. \\
-TC-12 & Audio upload validation & Upload non-MP3 or file larger than 2MB & Upload is rejected with clear error. \\
+TC-01 & Register with valid email/password & Open /login, enter valid credentials, submit register & Account created; verification email sent via Resend; user prompted to check inbox. \\
+TC-02 & Email verification & Click link in verification email & Account marked \_verified; login succeeds. \\
+TC-03 & Google OAuth login & Click ``Tiếp tục với Google''; complete consent screen & Redirected to /callback; JWT saved to localStorage; dashboard loads. \\
+TC-04 & AuthGate redirect & Open /dashboard without token in localStorage & Spinner briefly shown; user redirected to /login. \\
+TC-05 & New learner dashboard recommendation & Register, verify, login, open dashboard & Dashboard recommends first lesson in Khởi đầu. \\
+TC-06 & Lesson visit tracking & Open any lesson & LessonProgress record created with state = in\_progress; lesson card in Learning Path shows ``Đang học''. \\
+TC-07 & Exercise submit and progress complete & Open lesson, answer all questions, submit & Score and per-question feedback shown; LessonProgress state = completed; lesson card shows ``Hoàn thành''. \\
+TC-08 & Scroll-based completion & Open a lesson with no QuestionSet; scroll to bottom & Completion banner appears; LessonProgress state = completed. \\
+TC-09 & Streak calculation & Visit lessons on three consecutive days & Dashboard streak counter shows 3. \\
+TC-10 & Ebbinghaus review reminder & Complete a lesson; advance system date by 7 days & Lesson appears in ``Ôn tập hôm nay'' with forget-risk ``Trung bình''. \\
+TC-11 & Fill-blank case normalisation & Answer \texttt{Bonjour} when correct answer is \texttt{bonjour} & Answer marked correct (case-insensitive comparison). \\
+TC-12 & Fill-blank accent preservation & Answer \texttt{e} when correct answer is \texttt{é} & Answer marked incorrect (diacritics not stripped). \\
+TC-13 & Admin publish lesson & Create draft lesson in Payload admin; publish & Lesson appears in Learning Path for learner. \\
+TC-14 & Admin draft invisible to learner & Create lesson as draft; do not publish & Lesson does NOT appear in GraphQL query result. \\
+TC-15 & Logout & Click logout in sidebar & localStorage token cleared; redirected to /login; subsequent (app) route access redirects to /login. \\
 \bottomrule
 \end{longtable}
+
+\subsection{Defect Testing}
+\label{sec:defect}
+
+Defect test cases target implementation risks identified by reading the source code. They are grouped into five categories: Authentication, Exercise Grading, Progress State Machine, Access Control, and Input/Boundary.
+
+\subsubsection{Category D1: Authentication and Token Handling}
+
+\begin{longtable}{p{0.08\linewidth} p{0.24\linewidth} p{0.30\linewidth} p{0.26\linewidth}}
+\caption{Defect tests -- Authentication}\\
+\toprule
+ID & Defect Risk & Test Input & Expected Behaviour \\
+\midrule
+\endhead
+DT-01 & \textbf{[Critical] Token location mismatch.} All three API routes (\texttt{/api/lesson/visit}, \texttt{/api/exercise/submit}, \texttt{/api/exercise/complete-scroll}) read the token from the \texttt{payload-token} cookie, but the learner login flow stores the JWT in \texttt{localStorage} only (no cookie is set). A standard email/password or Google OAuth learner has no \texttt{payload-token} cookie. & Log in via email/password; open a lesson; trigger exercise submit or scroll complete. Confirm no \texttt{payload-token} cookie is present in DevTools. & Without a mitigation, all three routes return HTTP 401 for every normal learner. Mitigation: routes must also accept the JWT from the \texttt{Authorization} header (falling back from cookie). \\
+DT-02 & \textbf{JWT decoded without signature verification.} The token payload is base64-decoded directly (\texttt{Buffer.from(parts[1], "base64")}) without calling a verification function. A crafted token with an arbitrary \texttt{id} field and \texttt{collection: "learners"} will pass the auth check. & Manually craft a JWT with header.payload.fakesignature where payload = \texttt{\{"id":999,"collection":"learners"\}}; send in \texttt{payload-token} cookie to \texttt{/api/exercise/submit}. & Route should reject the token because the signature is invalid. Currently it does not -- it will proceed with learner ID 999. Mitigation: verify the signature using the \texttt{PAYLOAD\_SECRET} before trusting the payload. \\
+DT-03 & Admin token used on learner API route. & Send a valid \texttt{payload-token} cookie belonging to an admin (\texttt{users} collection) to \texttt{/api/exercise/submit}. & Route returns HTTP 403 ``Not a learner''. This is correctly handled in the current code. \\
+DT-04 & AuthGate spinner with no timeout. & Simulate CMS unreachable (block \texttt{localhost:3001} at the network level) and navigate to \texttt{/dashboard}. & Currently the loading spinner shows indefinitely because \texttt{getMe()} has no timeout or error handler. Expected: a timeout of ~10 seconds with an error message and a retry button. \\
+DT-05 & \texttt{getMe()} fallback endpoint does not exist. The function calls \texttt{/api/learners/oauth-me} as a fallback, but no such route is registered in Payload. & Log in via Google OAuth; inspect the network tab on any \texttt{(app)} page load. & The fallback fetch to \texttt{/api/learners/oauth-me} returns 404. Because the primary \texttt{/api/learners/me} already returns the user for valid tokens, this is non-fatal for a fresh session, but a stale OAuth token will silently return null and log the user out unexpectedly. \\
+DT-06 & Accessing (app) routes without any token. & Clear localStorage; navigate directly to \texttt{/dashboard}. & AuthGate calls \texttt{getMe()}, receives null, clears token, and calls \texttt{router.replace("/login")}. Confirm no flash of protected content before redirect. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Category D2: Exercise Grading Logic}
+
+\begin{longtable}{p{0.08\linewidth} p{0.24\linewidth} p{0.30\linewidth} p{0.26\linewidth}}
+\caption{Defect tests -- Exercise grading}\\
+\toprule
+ID & Defect Risk & Test Input & Expected Behaviour \\
+\midrule
+\endhead
+DT-07 & \textbf{[High] Question set with only ordering / matching blocks reports 100\% for zero effort.} \texttt{gradeQuestion} only handles four types; the filter produces \texttt{total = 0}. Score formula: \texttt{round(correct / total * 100)} evaluates to \texttt{NaN} (or 100 if the division is guarded) when \texttt{total = 0}. & Create a QuestionSet containing only \texttt{ordering} and \texttt{matching} blocks. Log in as learner and submit without answering anything. & Score should be reported as 0/0 with a clear message that no gradable questions were found, not as a passing score. The LessonProgress state should NOT be set to completed on a 0-question set unless this is explicitly the intended design. \\
+DT-08 & Ordering and matching silently excluded from grading. & Submit a question set that contains one \texttt{single\_choice} (answered correctly) and one \texttt{ordering} block. Inspect the response. & Response shows \texttt{total = 1}, not 2. The UI score display should match and should not imply the ordering was graded. \\
+DT-09 & Fill-blank unicode normalisation (precomposed vs decomposed accents). & Submit \texttt{é} encoded as \texttt{U+0065 U+0301} (e + combining acute) when the stored correct answer uses the precomposed form \texttt{U+00E9}. & Both forms should match. Currently the comparison uses plain string equality after \texttt{toLowerCase()}, so these two encodings will fail to match even though they look identical to users. Mitigation: apply NFC normalisation before comparison. \\
+DT-10 & Fill-blank partial answer: unanswered blanks produce the string ``undefined''. & Submit a fill-blank question with two blanks; provide the first blank only (omit the second key from the answers object). & The second blank should be treated as empty/wrong, not as the literal string ``undefined''. The per-question result display should show ``(chưa điền)'' not ``undefined''. \\
+DT-11 & Multiple-choice submit with empty array when correct answer set is empty. & Create a multiple-choice question where all options have \texttt{isCorrect: false} (edge case -- no correct option). Submit an empty array. & \texttt{JSON.stringify([]) === JSON.stringify([])} evaluates to true, so the answer is marked correct. This is logically inconsistent. Mitigation: treat questions with no correct options as invalid at CMS data-entry time. \\
+DT-12 & Submit for a non-existent questionSetSlug. & POST to \texttt{/api/exercise/submit} with \texttt{questionSetSlug: "does-not-exist"}. & Returns HTTP 404 ``Question set not found''. Currently handled correctly. \\
+DT-13 & Submit with missing required body fields. & POST to \texttt{/api/exercise/submit} with an empty body \texttt{\{\}}. & Returns HTTP 400 ``Missing fields''. Currently handled correctly. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Category D3: Progress State Machine}
+
+\begin{longtable}{p{0.08\linewidth} p{0.24\linewidth} p{0.30\linewidth} p{0.26\linewidth}}
+\caption{Defect tests -- Progress state machine}\\
+\toprule
+ID & Defect Risk & Test Input & Expected Behaviour \\
+\midrule
+\endhead
+DT-14 & \textbf{[Medium] Concurrent lesson visit requests cause a 500.} \texttt{/api/lesson/visit} uses a check-then-create pattern with no lock. Two simultaneous requests for the same (learner, lessonSlug) both pass the existence check, both try to POST, and the second hits the Payload \texttt{beforeChange} uniqueness hook which throws an error. The outer catch returns HTTP 500. & Simulate two simultaneous visits: open the same lesson in two browser tabs at the same time, or send two parallel POST requests to \texttt{/api/lesson/visit} with the same payload. & The second request currently returns HTTP 500. Expected: the route should catch the duplicate-progress error specifically and return HTTP 200 with the existing record, treating the race as a no-op. \\
+DT-15 & Scroll-complete creates a completed record without an in\_progress record. & POST to \texttt{/api/exercise/complete-scroll} for a lesson that has never been visited (no LessonProgress record). & The route creates a new record directly with \texttt{state: completed}, bypassing the \texttt{in\_progress} state. This is functionally correct (the lesson ends up completed) but it means the \texttt{startedAt} timestamp equals \texttt{completedAt}, and the state machine diagram (in\_progress $\rightarrow$ completed) is violated. Confirm the dashboard and learning path handle this edge case without errors. \\
+DT-16 & Scroll-complete on an already-completed lesson. & Open a lesson already marked completed; scroll to the bottom to trigger the banner again. & The route checks \texttt{doc.state !== "completed"} before patching; no write is issued. Returns HTTP 200. Confirm idempotent behaviour. \\
+DT-17 & Lesson visit regresses state from completed to in\_progress. & Open a completed lesson; the \texttt{LessonVisitTracker} fires \texttt{/api/lesson/visit}. & The route finds the existing completed record and only updates \texttt{lastVisitedAt} via PATCH. The state must NOT change from \texttt{completed} to \texttt{in\_progress}. Confirm the PATCH body does not include a \texttt{state} field. \\
+DT-18 & React Strict Mode double-invocation of \texttt{LessonVisitTracker}. & Run the app in development mode (where React mounts components twice); open a lesson for the first time. & The first call creates the progress record; the second concurrent call triggers the duplicate detection. Should not produce a 500 visible to the user. \\
+DT-19 & Exercise submitted for a lesson where no prior progress record exists. & Register a new account; skip the lesson visit step; directly POST to \texttt{/api/exercise/submit} with a valid questionSetSlug for that lesson. & The submit route creates a new completed record directly. Confirm it succeeds and returns \texttt{completedLesson: true}. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Category D4: Access Control}
+
+\begin{longtable}{p{0.08\linewidth} p{0.24\linewidth} p{0.30\linewidth} p{0.26\linewidth}}
+\caption{Defect tests -- Access control}\\
+\toprule
+ID & Defect Risk & Test Input & Expected Behaviour \\
+\midrule
+\endhead
+DT-20 & Unauthenticated access to published lesson content. & Send a GraphQL query for levels and published lessons with no \texttt{Authorization} header and no cookies. & Returns published content. The \texttt{Lessons}, \texttt{Levels}, and \texttt{Units} collections have \texttt{read: () => true} access rules and this is by design for public course discovery. \\
+DT-21 & Unauthenticated query for draft lessons. & Send a GraphQL query that explicitly requests \texttt{\_status: "draft"} (or queries without the published filter). & Payload's draft/publish versioning layer filters out draft documents for unauthenticated requests. Confirm that draft content is not returned. \\
+DT-22 & Learner reads another learner's progress via REST. & Log in as Learner A; send GET \texttt{/api/lesson-progress?where[learner][equals]=LEARNER\_B\_ID} with Learner A's JWT. & Payload's row-level access control (\texttt{learner: \{equals: user.id\}}) filters the query to Learner A's own records only. Returns empty docs array for Learner B's records. \\
+DT-23 & Learner patches a progress record they do not own. & Log in as Learner A; send PATCH \texttt{/api/lesson-progress/:LEARNER\_B\_RECORD\_ID} with Learner A's JWT. & Payload returns HTTP 403 or 404. The update access control constraint \texttt{learner: \{equals: user.id\}} must prevent this. \\
+DT-24 & Unverified learner accesses (app) routes. & Register with email/password but skip the verification email; obtain a login session via direct API call. & Payload allows login for unverified accounts by default unless \texttt{verify.requireEmailVerification} is set. Confirm whether unverified learners are blocked at login or allowed through. Document the intended behaviour. \\
+DT-25 & CORS rejection from disallowed origin. & Send a cross-origin request from an origin not in the CMS \texttt{cors.origins} list (e.g.\ \texttt{http://evil.example.com}). & Browser receives a CORS error; the API does not return content to the disallowed origin. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Category D5: Input Validation and Boundary Conditions}
+
+\begin{longtable}{p{0.08\linewidth} p{0.24\linewidth} p{0.30\linewidth} p{0.26\linewidth}}
+\caption{Defect tests -- Input and boundary conditions}\\
+\toprule
+ID & Defect Risk & Test Input & Expected Behaviour \\
+\midrule
+\endhead
+DT-26 & Dashboard division by zero when \texttt{totalLessonCount = 0}. & Deploy with no published lessons; log in and open the dashboard. & Progress percentage calculation \texttt{completed / totalLessonCount * 100} must not produce \texttt{NaN} or crash. Should display 0\% or ``No lessons yet''. \\
+DT-27 & Empty progress list in streak and heatmap. & Log in as a brand-new learner who has never opened a lesson. & \texttt{buildStreakData} receives an empty array; streak = 0; heatmap renders an all-zero grid. Dashboard must not throw a runtime error. \\
+DT-28 & Malformed JSON body to any API route. & Send \texttt{Content-Type: application/json} with body \texttt{not-valid-json} to \texttt{/api/lesson/visit}. & Route returns HTTP 400. Currently \texttt{/api/exercise/submit} wraps \texttt{request.json()} in a try/catch; confirm the other two routes do the same (they do not -- they call \texttt{await request.json()} without a guard). \\
+DT-29 & Oversized fill-blank answer. & Submit a fill-blank answer where one blank contains a string of 50,000 characters. & The grading function compares strings; the comparison should complete without crashing or timing out. Payload's REST write of the LessonProgress record should also handle this gracefully. \\
+DT-30 & \texttt{lessonSlug} containing URL-special characters in visit / complete-scroll. & POST \texttt{/api/lesson/visit} with \texttt{lessonSlug: "../../etc/passwd"} or \texttt{lessonSlug: "slug with spaces \& symbols"}. & The slug is embedded in the Payload REST query string (\texttt{where[lessonSlug][equals]=...}) via template literal without encoding. Confirm Payload's query parser rejects malformed values gracefully and does not return unexpected records. Mitigation: URL-encode the slug value before embedding in the query string. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Defect Summary and Priority}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{l X l l}
+\toprule
+ID & Defect & Severity & Phase Fix \\
+\midrule
+DT-01 & Token location mismatch: API routes read cookie; learner auth uses localStorage & Critical & Phase 4 \\
+DT-02 & JWT signature not verified before trusting payload & High & Phase 4 \\
+DT-07 & All-ordering / all-matching question set scores 100\% with zero answers & High & Phase 4 \\
+DT-14 & Concurrent lesson visit race condition returns HTTP 500 & Medium & Phase 4 \\
+DT-09 & Fill-blank unicode NFC mismatch (precomposed vs decomposed) & Medium & Phase 4 \\
+DT-10 & Unanswered fill-blank blank displays ``undefined'' to user & Medium & Phase 4 \\
+DT-28 & \texttt{/api/lesson/visit} and \texttt{/api/exercise/complete-scroll} do not wrap \texttt{request.json()} in try/catch & Medium & Phase 4 \\
+DT-30 & lessonSlug not URL-encoded before embedding in Payload query string & Medium & Phase 4 \\
+DT-04 & AuthGate spinner has no timeout when CMS is unreachable & Low & Phase 4 \\
+DT-05 & \texttt{getMe()} fallback calls non-existent \texttt{/api/learners/oauth-me} & Low & Phase 4 \\
+DT-15 & Scroll-complete can create a completed record without prior in\_progress & Low & Phase 5 \\
+DT-11 & Multiple-choice empty-array edge case auto-passes & Low & Phase 5 \\
+\bottomrule
+\end{tabularx}
+\caption{Defect priority summary}
+\end{table}
 
 \subsection{Testing Evidence Placeholder}
 
