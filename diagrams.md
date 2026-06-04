@@ -1,6 +1,110 @@
 # Francais.vn Diagram Set
 
-This file uses Markdown-native text diagrams for every diagram except the three sequence diagrams, which intentionally remain Mermaid.
+This file documents the **actual implemented architecture** of `francaisvn` (the pnpm monorepo with `apps/web` + `apps/cms`). It uses Markdown-native text diagrams for every diagram except the sequence diagrams, which remain Mermaid.
+
+> Reality check vs. earlier drafts: the platform does **not** use Supabase, Strapi, PostHog, Sentry, Vercel, or a guest-trial flow. It is a **pnpm monorepo** of two Next.js apps — `apps/web` (learner frontend, port 3000) and `apps/cms` (Payload CMS admin + REST/GraphQL API, port 3001) — backed by **PostgreSQL 16 (Docker)**, with **Payload native auth**, **Google OAuth (custom endpoints)** and **Resend** email verification.
+
+---
+
+## 0. Tech & Module Map (quick reference)
+
+```text
+francaisvn/  (pnpm workspaces)
+├── apps/web   @francaisvn/web   Next.js 16 (App Router), React 19.2, Tailwind v4, shadcn/ui   :3000
+├── apps/cms   @francaisvn/cms   Payload CMS 3.8x (runs on Next.js) + Postgres adapter         :3001
+└── docker-compose.yml           PostgreSQL 16 (Alpine)  db=francaisvn_cms                     :5432
+
+Web → CMS communication:
+  - GraphQL   src/lib/graphql.ts        (content reads: levels/units/lessons/question-sets)
+  - REST      src/lib/auth.ts           (learner auth: /api/learners/*)
+  - Next API  src/app/api/*             (server-side grading + progress writes -> CMS REST)
+
+External services actually used:  Google OAuth 2.0  •  Resend (email verification)
+```
+
+### 0.1 Overall Architecture
+
+A 4-tier view. Each box is a **functional component** (what it does), not a source file.
+Numbered arrows are explained in the *Data Flows* table below the diagram.
+
+```text
+                ┌───────────┐   ┌───────────┐   ┌───────────────┐
+   TIER 1       │   Guest   │   │  Learner  │   │ Admin/Founder │
+   Actors       └─────┬─────┘   └─────┬─────┘   └───────┬───────┘
+                      │ browse        │ learn           │ author content
+                      ▼               ▼                 ▼
+   ════════════════════════════════════════════════════════════════════════════
+
+   TIER 2       ┌──────────────────────────────────┐   ┌────────────────────────┐
+   Presentation │        Learner Web App           │   │     Admin Console      │
+   (Browser)    │  ─────────────────────────────── │   │  ────────────────────  │
+                │  Landing · Auth screens          │   │  Content editor        │
+                │  Dashboard · Learning Path       │   │  (lessons, units,      │
+                │  Lesson Reader + Exercises       │   │   question sets, media,│
+                │  Vocabulary / Notes / Practice * │   │   vocabulary)          │
+                │  ─────────────────────────────── │   │  Draft → Publish       │
+                │  Session held as JWT (browser)   │   │  Session held as cookie│
+                └───────────────┬──────────────────┘   └───────────┬────────────┘
+                                │                                   │
+                       (1) read content                            │ (6) manage
+                       (2) sign in / up                            │     content
+                       (3) save progress                           │
+                                ▼                                   ▼
+   ════════════════════════════════════════════════════════════════════════════
+
+   TIER 3       ┌──────────────────────────────────┐   ┌────────────────────────┐
+   Application  │   Web App Server (frontend BFF)  │   │   Content & Identity   │
+   (Services)   │  ─────────────────────────────── │   │   Backend (Payload)    │
+                │  • Auth Guard (gate app pages)   │   │  ────────────────────  │
+                │  • Exercise Grading Service      │   │  • Content API         │
+                │  • Lesson Visit / Completion     │   │    (read: GraphQL,     │
+                │    Tracking                      │──▶│     write: REST)       │
+                │                                  │(4)│  • Auth Service         │
+                │  (renders pages, calls backend   │   │    (learners + admins) │
+                │   on the user's behalf)          │   │  • Business Rules:     │
+                └──────────────────────────────────┘   │    access control,     │
+                                                        │    drafts/publish,     │
+                ┌──────────────────────────────────┐   │    auto-slug, email    │
+                │  External Identity & Mail         │◀──│    verify, i18n vi/fr/en│
+                │  • Google OAuth 2.0 (sign-in)     │(7)│                        │
+                │  • Resend (verification email)    │   └───────────┬────────────┘
+                └──────────────────────────────────┘               │ (5) persist
+   ════════════════════════════════════════════════════════════════│═════════════
+                                                                    ▼
+   TIER 4       ┌─────────────────────────────────────────────────────────────┐
+   Data         │                    PostgreSQL 16 (Docker)                    │
+                │  ─────────────────────────────────────────────────────────  │
+                │  Identity:  admins · learners                                │
+                │  Content :  levels · units · lessons · question sets ·       │
+                │             vocabulary · media (uploaded files)              │
+                │  Runtime :  lesson progress · question-set attempts          │
+                └─────────────────────────────────────────────────────────────┘
+
+   Legend:  * Vocabulary/Notes/Practice screens exist but still run on mock
+             data / browser storage (not yet wired to the backend).
+```
+
+**Data Flows**
+
+| # | From → To | Purpose | How |
+|---|-----------|---------|-----|
+| 1 | Web App → Content Backend | Load published courses (levels → units → lessons → question sets) | GraphQL read, public access |
+| 2 | Web App → Auth Service | Register, verify email, log in (email/password or Google) | REST (`/api/learners/*`) |
+| 3 | Web App → Web App Server | Submit exercise answers, mark lesson visited/completed | Internal API calls |
+| 4 | Web App Server → Content Backend | Grade answers & write learner progress on the user's behalf | REST with learner's JWT |
+| 5 | Content Backend → PostgreSQL | Read/write all content, identity & runtime data | Postgres adapter |
+| 6 | Admin Console → Content Backend | Create/edit/publish lessons, question sets, media, vocabulary | Payload admin panel |
+| 7 | Content Backend → Google / Resend | Federated sign-in & sending verification emails | OAuth 2.0 / Resend API |
+
+**Key architectural ideas**
+
+1. **One monorepo, two runnable apps.** The *Learner Web App* (frontend + its own server-side helper layer) and the *Content & Identity Backend* (Payload — admin panel + API) are separate deployables sharing one repository.
+2. **The backend is the single data hub.** There is no separate content store vs. user store and no hand-written data layer — every read and write funnels through the backend into **one PostgreSQL database**.
+3. **Two independent identities.** *Admins* sign in to the authoring console; *learners* sign in to the web app. Their sessions never collide (cookie vs. token), so the two audiences stay fully separated.
+4. **Reads vs. writes are split.** Learners *read* published course content directly; anything that *changes state* (progress, grading) goes through the web app's server layer so grading and authorization happen server-side, not in the browser.
+5. **Some screens are still front-end-only.** Vocabulary SRS and goals live in browser storage; Notes/Practice/Dictation/Shadowing use mock data; Chat and AI Mode are placeholders — all marked so the diagram reflects *what is actually wired*, not the wishlist.
+
+---
 
 ## 1. System Modeling
 
@@ -8,338 +112,347 @@ This file uses Markdown-native text diagrams for every diagram except the three 
 
 ```text
 Actors:
-  Guest User
-  Learner
-  Admin / Founder
+  Guest User      (public landing page only)
+  Learner         ("learners" auth collection)
+  Admin / Founder ("users" auth collection -> Payload admin panel)
 
-                         +--------------------------------+
-                         |      Francais.vn Platform      |
-                         |--------------------------------|
-Guest User ------------> | Next.js Web App                |
-Learner ---------------> | API Routes / Server Actions    |
-Admin / Founder -------> | Application Services           |
-                         +--------------------------------+
-                                      |
-                                      v
-        +-----------------------------+-----------------------------+
-        |              |              |              |              |
-        v              v              v              v              v
-+---------------+ +-------------+ +-------------+ +----------+ +-------------+
-| Supabase Auth | | PostgreSQL  | | Supabase    | | Strapi   | | Email       |
-|               | | Database    | | Storage     | | CMS      | | Provider    |
-+---------------+ +-------------+ +-------------+ +----------+ +-------------+
-        |
-        +-----------------------------+-----------------------------+
-                                      |                             |
-                                      v                             v
-                              +---------------+             +-------------+
-                              | PostHog       |             | Sentry      |
-                              | Analytics     |             | Monitoring  |
-                              +---------------+             +-------------+
+                +-------------------------------------------------------+
+                |                 Francais.vn Platform                  |
+                |-------------------------------------------------------|
+ Guest -------->|  apps/web  : Next.js learner frontend        (:3000)  |
+ Learner ------>|            - GraphQL reads, REST auth, /api routes    |
+                |                          |                            |
+ Admin -------->|  apps/cms  : Payload CMS admin + API          (:3001) |
+                |            - /admin, /api (REST), /graphql            |
+                +----------------------------+--------------------------+
+                                             |
+                  +--------------------------+--------------------------+
+                  |                          |                          |
+                  v                          v                          v
+        +-------------------+      +-------------------+      +-------------------+
+        | PostgreSQL 16     |      | Google OAuth 2.0  |      | Resend (Email)    |
+        | (Docker)          |      | learner sign-in   |      | verification mail |
+        | francaisvn_cms    |      +-------------------+      +-------------------+
+        +-------------------+
 
-Hosting: Vercel serves the Next.js web application.
+        +-------------------------------------------------------------------+
+        | Payload Media collection = file uploads (image/audio/video)       |
+        | stored via Payload upload adapter (local), no external object store|
+        +-------------------------------------------------------------------+
+
+Hosting: not provisioned in repo (local dev via `pnpm dev` + Docker Postgres).
 ```
 
-### 1.2 UML Class Diagram
+### 1.2 UML Class Diagram (Payload collections)
 
 ```text
-+------------------+        1      0..1     +------------------+
-| User             |------------------------>| UserGoal         |
-|------------------|                         |------------------|
-| id               |                         | userId           |
-| email            |                         | goal             |
-| passwordHash     |                         | examDate         |
-| role             |                         +------------------+
-| createdAt        |
-| lastLogin        |        1      0..*     +------------------+
-+------------------+------------------------>| Progress         |
-        |                                    |------------------|
-        | 1                                  | userId           |
-        |                                    | lessonId         |
-        | 0..*                               | state            |
-        v                                    | lastVisited      |
-+------------------+                         | completedAt      |
-| Note             |                         +------------------+
-|------------------|
-| id               |        1      0..*     +------------------+
-| userId           |------------------------>| ExerciseAttempt  |
-| lessonId         |                         |------------------|
-| title            |                         | id               |
-| bodyMd           |                         | userId           |
-| createdAt        |                         | exerciseId       |
-| updatedAt        |                         | score            |
-+------------------+                         | total            |
-                                             | submittedAt      |
-                                             +------------------+
+                              +----------------------------+
+                              | Learner  (auth: learners)  |
+                              |----------------------------|
+                              | id                         |
+                              | email (unique)             |
+                              | password (hash/salt)       |
+                              | displayName                |
+                              | avatar  -> Media           |
+                              | plan: free | premium       |
+                              | status: active | blocked   |
+                              | _verified                  |
+                              +-------------+--------------+
+                                            | 1
+              +-----------------------------+-----------------------------+
+              | 0..*                                                      | 0..*
+              v                                                          v
+   +----------------------------+                          +----------------------------+
+   | LessonProgress             |                          | QuestionSetAttempt         |
+   |----------------------------|                          | (collection defined;       |
+   | learner -> Learner         |                          |  not yet written by web)   |
+   | lessonSlug                 |                          |----------------------------|
+   | levelCode                  |                          | learner -> Learner         |
+   | unitSlug                   |                          | questionSetSlug            |
+   | state: in_progress|completed|                         | lessonSlug                 |
+   | scrollPercent              |                          | score / total / percent    |
+   | startedAt / lastVisitedAt  |                          | passed / durationSec       |
+   | completedAt                |                          | answers (JSON snapshot)    |
+   +----------------------------+                          | submittedAt                |
+   (app-level unique [learner,lessonSlug])                 +----------------------------+
 
-+------------------+        1      0..*     +------------------+
-| Level            |------------------------>| TopicGroup       |
-|------------------|                         |------------------|
-| id               |                         | id               |
-| name             |                         | levelId          |
-| order            |                         | nameVi           |
-+------------------+                         | order            |
-                                             +------------------+
-                                                      |
-                                                      | 1 to 0..*
-                                                      v
-                                             +------------------+
-                                             | Lesson           |
-                                             |------------------|
-                                             | id               |
-                                             | topicGroupId     |
-                                             | title            |
-                                             | contentMd        |
-                                             | order            |
-                                             | status           |
-                                             | isSample         |
-                                             | publishedAt      |
-                                             +------------------+
-                                               |       |       |
-                                      1  0..*  |       |       | 1  0..*
-                                               v       v       v
-                                      +----------+ +----------+ +------------+
-                                      | Exercise | |Dictation | | Shadowing  |
-                                      +----------+ +----------+ +------------+
-                                           |
-                                           | 1 to 1..*
-                                           v
-                                      +----------+
-                                      | Question |
-                                      +----------+
-                                           |
-                                           | 1 to 0..*
-                                           v
-                              +--------------------------+
-                              | ExerciseAttemptAnswer    |
-                              +--------------------------+
+CONTENT HIERARCHY (admin-managed):
 
-Other relationships:
-  User 1 -> 0..* Bookmark
-  User 1 -> 0..* DictationAttempt
-  Dictation 1 -> 0..* DictationAttempt
-  ExerciseAttempt 1 -> 1..* ExerciseAttemptAnswer
+   +-----------------+ 1     0..* +-----------------+ 1     0..* +-----------------------+
+   | Level           |---------->| Unit            |---------->| Lesson                |
+   |-----------------|           |-----------------|           |-----------------------|
+   | code (unique)   |           | slug (auto)     |           | slug (auto, unique)   |
+   | title (L)       |           | level -> Level  |           | unit -> Unit          |
+   | description     |           | title (L)       |           | title (L) / subtitle  |
+   | orderIndex      |           | description     |           | description           |
+   | status          |           | orderIndex      |           | lessonType            |
+   | accessMode      |           | status          |           | contentMd (markdown)  |
+   +-----------------+           | accessMode      |           | mediaBlocks[] -> Media|
+                                 +-----------------+           | vocabularies[] ------+|
+                                                               | tags[] (text)        ||
+                                                               | orderIndex           ||
+                                                               | estimatedMinutes     ||
+                                                               | accessMode           ||
+                                                               | statusInPath         ||
+                                                               | completionRule       ||
+                                                               | _status (draft/pub)  ||
+                                                               +----------+-----------+|
+                                                                          | 1          |
+                                                                          | 0..*       | hasMany
+                                                                          v            v
+                                                          +-----------------------+  +----------------+
+                                                          | QuestionSet           |  | Vocabulary     |
+                                                          |-----------------------|  |----------------|
+                                                          | slug (auto)           |  | word           |
+                                                          | title                 |  | type           |
+                                                          | lesson -> Lesson      |  | ipa            |
+                                                          | setType               |  | meaningVi      |
+                                                          | passThreshold         |  | audio -> Media |
+                                                          | _status (draft/pub)   |  | examples[]     |
+                                                          | questions[] : BLOCKS  |  |  (fr, vi)      |
+                                                          +----------+------------+  +----------------+
+                                                                     |
+                                          inline Payload Blocks (NOT a separate collection)
+                                                                     v
+   +-------------------------------------------------------------------------------------------+
+   | Question Block (6 types). Base: questionId, prompt, instruction, media->Media,            |
+   |                            explanation, difficulty                                        |
+   |  single_choice   options[]{text,isCorrect}        multiple_choice options[]{text,isCorrect}|
+   |  true_false      correctAnswer:bool               fill_blank   textWithBlanks, answers[]   |
+   |  ordering        items[]{text} (in order)         matching     pairs[]{leftItem,rightItem} |
+   +-------------------------------------------------------------------------------------------+
+
+   Media: id, alt, filename, mimeType, filesize, url  (image / audio / video uploads)
+   (L) = localized field (vi default, fr, en)
 ```
 
-### 1.3 Sequence Diagram: Guest Trial To Register
+### 1.3 Sequence Diagram: Register / Login (Email + Google OAuth)
 
 ```mermaid
 sequenceDiagram
-  actor Guest
-  participant Web as Next.js Web App
-  participant GuestSvc as GuestTrialService
-  participant Content as ContentService
-  participant Auth as Supabase Auth
-  participant Progress as ProgressService
+  actor User as Guest/Learner
+  participant Web as apps/web (Next.js :3000)
+  participant CMS as apps/cms Payload REST (:3001)
+  participant Google as Google OAuth
+  participant Resend as Resend Email
   participant DB as PostgreSQL
 
-  Guest->>Web: Click "Try free"
-  Web->>GuestSvc: Start guest session
-  GuestSvc-->>Web: Guest state
-  Web->>Content: Get sample lesson
-  Content->>DB: Query lesson where is_sample=true
-  DB-->>Content: Sample lesson and exercise
-  Content-->>Web: Sample content
-  Web-->>Guest: Show guest dashboard
+  Note over User,DB: A) Email + password
+  User->>Web: Submit register (email, password) at /login
+  Web->>CMS: POST /api/learners
+  CMS->>DB: Insert learner (_verified=false)
+  CMS->>Resend: Send verification email (vi template)
+  Resend-->>User: Verification link -> /verify?token=...
+  User->>Web: Open /verify?token=
+  Web->>CMS: POST /api/learners/verify/:token
+  CMS->>DB: Set _verified=true
+  User->>Web: Login (email, password)
+  Web->>CMS: POST /api/learners/login
+  CMS-->>Web: { token, user }
+  Web->>Web: setToken() -> localStorage["learner_token"]
+  Web-->>User: Redirect /dashboard
 
-  Guest->>Web: Complete sample exercise
-  Web->>GuestSvc: Save local trial progress
-  GuestSvc-->>Web: localStorage payload
-  Web-->>Guest: Show register prompt
+  Note over User,DB: B) Google OAuth (custom endpoints)
+  User->>Web: Click "Tiếp tục với Google"
+  Web->>CMS: GET /api/learners/oauth/google
+  CMS->>Google: Redirect to consent
+  Google-->>CMS: GET /api/learners/oauth/google/callback (code)
+  CMS->>DB: Find or create learner (overrideAccess)
+  CMS->>CMS: jwtSign token
+  CMS-->>Web: Redirect /callback?token=<jwt>
+  Web->>Web: setToken() -> localStorage
+  Web-->>User: Redirect /dashboard
 
-  Guest->>Web: Register
-  Web->>Auth: Create account
-  Auth-->>Web: User session
-  Web->>Progress: Merge guest progress
-  Progress->>DB: Upsert progress and attempt
-  DB-->>Progress: Saved
-  Progress-->>Web: Merge complete
-  Web-->>Guest: Redirect to full dashboard
+  Note over Web,CMS: AuthGate calls /api/learners/me (Authorization: JWT) before rendering (app) routes
 ```
 
-### 1.4 Sequence Diagram: Lesson To Exercise Progress
+### 1.4 Sequence Diagram: Lesson Visit → Exercise → Progress
 
 ```mermaid
 sequenceDiagram
   actor Learner
-  participant Web as Next.js Web App
-  participant LessonSvc as LessonService
-  participant ExSvc as ExerciseService
-  participant Progress as ProgressService
-  participant Analytics as PostHog
+  participant Web as apps/web pages
+  participant API as Next.js /api routes (web)
+  participant GQL as Payload GraphQL
+  participant REST as Payload REST
   participant DB as PostgreSQL
 
-  Learner->>Web: Open dashboard
-  Web->>Progress: Get continue-learning recommendation
-  Progress->>DB: Read progress and published lessons
-  DB-->>Progress: Progress summary
-  Progress-->>Web: Recommended lesson
-  Web-->>Learner: Show dashboard card
+  Learner->>Web: Open /lessons/[slug]
+  Web->>GQL: Query lesson + question-sets (locale=vi)
+  GQL->>DB: Read published content
+  DB-->>GQL: Lesson + blocks
+  GQL-->>Web: Lesson detail
+  Web-->>Learner: Render lesson (markdown, media, exercise)
 
-  Learner->>Web: Open lesson
-  Web->>LessonSvc: Get lesson detail
-  LessonSvc->>DB: Read lesson content
-  DB-->>LessonSvc: Lesson
-  LessonSvc-->>Web: Lesson detail
-  Web-->>Learner: Render lesson
+  Note over Web,DB: LessonVisitTracker fires once on mount
+  Web->>API: POST /api/lesson/visit
+  API->>REST: find lesson-progress [learner, lessonSlug]
+  alt no record
+    API->>REST: POST lesson-progress (state=in_progress)
+  else exists
+    API->>REST: PATCH lastVisitedAt
+  end
+  REST->>DB: Upsert progress
 
-  Web->>Progress: Mark in_progress after dwell or scroll
-  Progress->>DB: Upsert progress
-  Progress->>Analytics: Track lesson.in_progress
+  Note over Web,DB: Path 1 — lesson HAS exercise
+  Learner->>Web: Answer questions -> Submit
+  Web->>API: POST /api/exercise/submit (answers)
+  API->>API: Read payload-token cookie -> learnerId
+  API->>REST: Fetch question-set by slug
+  API->>API: gradeQuestion() x4 types -> score
+  API->>REST: Upsert lesson-progress (state=completed, completedAt)
+  REST->>DB: Save
+  API-->>Web: { correct, total, score, details, completedLesson }
+  Web-->>Learner: Show score + per-question feedback
 
-  Learner->>Web: Submit exercise
-  Web->>ExSvc: Score answers
-  ExSvc->>DB: Save attempt and answers
-  ExSvc->>Progress: Evaluate completion suggestion
-  Progress-->>Web: Result and next action
-  Web-->>Learner: Show score, feedback, next lesson CTA
+  Note over Web,DB: Path 2 — lesson has NO exercise
+  Learner->>Web: Scroll to >= 90%
+  Web->>API: POST /api/exercise/complete-scroll
+  API->>REST: Upsert lesson-progress (state=completed)
+  REST->>DB: Save
+  Web-->>Learner: Green completion banner
 ```
 
-### 1.5 Sequence Diagram: Admin Publish Content
+### 1.5 Sequence Diagram: Admin Authoring & Publishing (Payload)
 
 ```mermaid
 sequenceDiagram
-  actor Admin
-  participant AdminUI as Admin UI
-  participant CMS as Strapi CMS
-  participant Storage as Supabase Storage
+  actor Admin as Admin (users collection)
+  participant Panel as Payload Admin UI (/admin)
+  participant Payload as Payload Core
   participant DB as PostgreSQL
-  participant LearnerUI as Learner Web UI
+  participant Learner as Learner Web (:3000)
 
-  Admin->>AdminUI: Create lesson
-  AdminUI->>CMS: Save draft lesson
-  CMS-->>AdminUI: Draft saved
+  Admin->>Panel: Login (cookie payload-token)
+  Admin->>Panel: Create Level / Unit / Lesson
+  Panel->>Payload: Save (autoSlugHook generates slug)
+  Payload->>DB: Insert draft (_status=draft)
 
-  Admin->>AdminUI: Add exercise and audio
-  AdminUI->>Storage: Upload audio file
-  Storage-->>AdminUI: audio_url
-  AdminUI->>CMS: Save exercise and media references
-  CMS-->>AdminUI: Content saved
+  Admin->>Panel: Add QuestionSet with inline question blocks
+  Panel->>Payload: Save question-set (draft)
+  Admin->>Panel: Upload audio/image to Media
+  Panel->>Payload: Store upload -> Media
 
-  Admin->>AdminUI: Preview
-  AdminUI->>CMS: Fetch draft preview
-  CMS-->>AdminUI: Preview data
-  AdminUI-->>Admin: Render learner-like preview
+  Admin->>Panel: Publish lesson / question-set
+  Panel->>Payload: _status = published
+  Payload->>DB: Persist published version
 
-  Admin->>AdminUI: Publish
-  AdminUI->>CMS: Change status to published
-  CMS->>DB: Persist published metadata
-  DB-->>CMS: Saved
-  CMS-->>AdminUI: Published
-
-  LearnerUI->>CMS: Fetch published learning path
-  CMS-->>LearnerUI: Published lesson appears
+  Learner->>Payload: GraphQL fetch learning path (public read access)
+  Payload->>DB: Read published only
+  DB-->>Payload: Published lessons
+  Payload-->>Learner: Lesson appears in path
 ```
 
 ### 1.6 State Diagram: Lesson Progress
 
 ```text
-          open lesson + dwell 30s
-          or scroll 30 percent
-    +--------------------------------+
-    |                                v
-+-------------+                +-------------+
-| NotStarted  |                | InProgress  |
-+-------------+                +-------------+
-                                      |
-                                      | click complete lesson
-                                      | or confirm after exercise pass
-                                      v
-                                +-------------+
-                                | Completed   |
-                                +-------------+
-                                      ^
-                                      |
-                                      | revisit lesson keeps state
-                                      |
-                                +-------------+
+   (no LessonProgress record)
+        "Mới"
+          |
+          |  open lesson  ->  POST /api/lesson/visit
+          v
+   +----------------+
+   | in_progress    |   "Đang học"
+   +----------------+
+          |
+          |  exercise submitted (any score) -> /api/exercise/submit
+          |  OR scroll >= 90% (no exercise)  -> /api/exercise/complete-scroll
+          v
+   +----------------+
+   | completed      |   "Hoàn thành"
+   +----------------+
+          ^
+          |  revisit -> only lastVisitedAt updated, state stays completed
+          |
 
-Admin unpublish behavior:
-  InProgress -> HiddenFromLearner -> InProgress when republished
-  Completed  -> HiddenFromLearner -> Completed when republished
+Notes:
+  - There is no stored "NotStarted" state; absence of a record = "Mới".
+  - Uniqueness [learner, lessonSlug] enforced at app level (beforeChange hook on create).
+  - completedLesson is also returned true if a completed record already existed.
 ```
 
-### 1.7 State Diagram: Content Publishing
+### 1.7 State Diagram: Content Publishing (Payload drafts)
 
 ```text
-          publish
-+-------+ -------> +-----------+
-| Draft |          | Published |
-+-------+ <------- +-----------+
-    |     unpublish      |
-    |                    | edit live content
-    | delete draft       v
-    |              +-----------+
-    +------------> | Published |
-                   +-----------+
-                         |
-                         | soft delete
-                         v
-                    +---------+
-                    | Deleted |
-                    +---------+
+   Applies to collections with versions.drafts = true: Lessons, QuestionSets
+
+   +---------+   publish (_status=published)   +-------------+
+   |  Draft  | ------------------------------> |  Published  |
+   +---------+ <------------------------------ +-------------+
+        |          save as draft / unpublish        |
+        |                                           | edit -> new draft version
+        |                                           v
+        |                                    +-------------+
+        |                                    |  Draft over |
+        |                                    |  Published  |
+        |                                    +-------------+
+        |
+        | delete
+        v
+   +---------+
+   | Removed |   (hard delete; no soft-delete field in schema)
+   +---------+
+
+   Learner GraphQL reads return PUBLISHED content only (public read access).
 ```
 
-### 1.8 State Diagram: Auth Session
+### 1.8 State Diagram: Learner Auth Session
 
 ```text
-+-----------+  try free   +---------------+  open second lesson  +--------------+
-| Anonymous | ----------> | GuestBrowsing | -------------------> | GuestAtLimit |
-+-----------+             +---------------+                      +--------------+
-      |                          |                                      |
-      | sign up                  | click register                       | click register
-      v                          v                                      v
-+-------------+          +-------------+                         +-------------+
-| Registering | -------> |Authenticated| <---------------------- | Registering |
-+-------------+ account  +-------------+                         +-------------+
-                          |         ^
-                          |         |
-                          |         | sign in again
-                          v         |
-                     +---------+    |
-                     | Expired | ---+
-                     +---------+
-                          ^
-                          |
-                 token expired and refresh failed
+   +-----------+     register      +----------------+   verify email   +-------------+
+   | Anonymous | ----------------> | Unverified     | ---------------> | Verified    |
+   +-----------+                   | (in DB)        |   /verify/:token | (can login) |
+        |   \                      +----------------+                  +------+------+
+        |    \  Google OAuth (auto-creates + signs JWT)                       |
+        |     \--------------------------------------------------------------> | login OK
+        |                                                                     v
+        |                                                            +----------------+
+        |   login (email+pwd)  -> token in localStorage["learner_token"]| Authenticated  |
+        +----------------------------------------------------------->  | JWT in header  |
+                                                                       +-------+--------+
+                                                                               |
+                          AuthGate: /api/learners/me fails (no/expired token)  |
+                                                                               v
+                                                                       +----------------+
+                                                                       | Redirect /login|
+                                                                       +----------------+
 
-Authenticated -- logout --> Anonymous
-Anonymous -- sign in --> Authenticating -- valid credentials --> Authenticated
+   Authenticated -- clearToken() / logout --> Anonymous
+   Admins are a SEPARATE collection (users) using cookie payload-token on :3001/admin.
 ```
 
-### 1.9 Activity Diagram: Guest Trial
+### 1.9 Activity Diagram: Register & First Login
 
 ```text
 Start
   |
   v
-Open landing page
+Open / (landing, public)
   |
   v
-Click "Try free"
+Go to /login
   |
-  v
-Open guest dashboard
+  +-- Choose Google? -- Yes --> Redirect CMS oauth/google --> Google consent
+  |                                   |
+  |                                   v
+  |                              Callback creates/finds learner, signs JWT
+  |                                   |
+  |                                   v
+  |                              /callback?token -> save localStorage --> Dashboard --> End
   |
-  v
-Open sample lesson
-  |
-  v
-Read lesson
-  |
-  v
-Complete sample exercise
-  |
-  v
-Show soft register prompt
-  |
-  +-- User registers? -- Yes --> Create account --> Merge guest progress --> Full dashboard --> End
-  |
-  +-- No ----------------------> Continue guest with banner
-                                  |
-                                  +-- Open second lesson? -- Yes --> Hard register modal --> End
-                                  |
-                                  +-- No -----------------------> Guest dashboard
+  +-- No (email/password)
+        |
+        v
+   Register (POST /api/learners) --> Resend sends verification email
+        |
+        v
+   Open /verify?token --> POST /api/learners/verify/:token
+        |
+        v
+   Login (POST /api/learners/login) --> token to localStorage
+        |
+        v
+   AuthGate confirms via /api/learners/me --> Dashboard --> End
 ```
 
 ### 1.10 Activity Diagram: Core Learning Loop
@@ -348,45 +461,42 @@ Show soft register prompt
 Start
   |
   v
-Open dashboard
+Open /dashboard  (computes streak/heatmap/progress from LessonProgress)
   |
-  +-- Has in-progress lesson? -- Yes --> Show continue lesson --+
-  |                                                            |
-  +-- No --> Suggest first or next lesson ----------------------+
-                                                               |
-                                                               v
-                                                        Open lesson detail
-                                                               |
-                                                               v
-                                                           Read lesson
-                                                               |
-                                                               v
-                                                        Mark in_progress
-                                                               |
-                                  +-- Has exercise? -- No --> Click complete lesson
-                                  |
-                                  +-- Yes --> Open exercise
-                                               |
-                                               v
-                                         Answer questions
-                                               |
-                                               v
-                                         Submit exercise
-                                               |
-                                               v
-                                      Show feedback and score
-                                               |
-                         +-- Score >= 70%? -- Yes --> Suggest mark completed
-                         |
-                         +-- No ----------------------> Retry exercise
-
-Click complete / confirmed complete
-  |
-  v
-Update progress
+  +-- Has in_progress lesson? -- Yes --> "Continue learning" card --+
+  |                                                                 |
+  +-- No --> Suggest next lesson from learning path -----------------+
+                                                                    |
+                                                                    v
+                                                          Open /lessons/[slug]
+                                                                    |
+                                                                    v
+                                            LessonVisitTracker -> POST /api/lesson/visit
+                                                          (state = in_progress)
+                                                                    |
+                          +-- Lesson has QuestionSet? -- No --> Scroll to >= 90%
+                          |                                          |
+                          |                                          v
+                          |                              POST /api/exercise/complete-scroll
+                          |                                  (state = completed) --> banner
+                          |
+                          +-- Yes --> Answer inline exercise
+                                       |
+                                       v
+                                  Submit -> POST /api/exercise/submit
+                                       |
+                                       v
+                                  Server grades (single/multiple choice,
+                                  true_false, fill_blank) -> score
+                                       |
+                                       v
+                                  state = completed, show per-question feedback
+                                       |
+                                       v
+                                  (retry allowed; ordering/matching not auto-graded)
   |
   v
-Show next lesson CTA
+Return to Dashboard (progress %, review reminders via Ebbinghaus 1/3/7/30d)
   |
   v
 End
@@ -398,484 +508,424 @@ End
 Start
   |
   v
-Admin login
+Admin login at /admin  (users collection, cookie auth)
   |
-  +-- Role is admin? -- No --> Reject access --> End
+  +-- Is admin (users)? -- No --> Access denied --> End
   |
   +-- Yes
        |
        v
-Open admin dashboard
+Create Level -> Unit -> Lesson  (autoSlugHook fills slug)
        |
        v
-Create or edit lesson
+Add contentMd, mediaBlocks (upload to Media), link Vocabularies/tags
        |
        v
-Attach exercise or dictation
+Create QuestionSet with inline question blocks (6 types)
        |
        v
-Preview learner view
+Save as Draft (_status = draft)
        |
-       +-- Content OK? -- No --> Create or edit lesson
+       +-- Ready? -- No --> keep editing draft
        |
        +-- Yes
             |
             v
-Publish content
+Publish (_status = published)
             |
             v
-Content visible in learning path
+Learner GraphQL reads now return the lesson
             |
-            v
-End
+            +-- Need change? -- Yes --> edit -> new draft over published --> publish
+            |
+            +-- No --> End
 ```
 
 ## 2. Architectural Design
 
-### 2.1 MVC Architecture
+### 2.1 MVC Mapping (as implemented)
 
 ```text
-+------------------------------+
-| View                         |
-|------------------------------|
-| Dashboard UI                 |
-| Learning Path UI             |
-| Lesson Detail UI             |
-| Exercise UI                  |
-| Notes UI                     |
-| Admin Screens                |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Controller                   |
-|------------------------------|
-| Next.js Routes               |
-| API Handlers                 |
-| Server Actions               |
-| Auth Guards                  |
-| Form Handlers                |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Model                        |
-|------------------------------|
-| User                         |
-| Lesson / Exercise / Dictation|
-| Progress                     |
-| Attempt                      |
-| Note                         |
-| Bookmark                     |
-+------------------------------+
++--------------------------------------------------------------+
+| View  (apps/web React client components)                     |
+|--------------------------------------------------------------|
+| DashboardView, LearningPathView, LessonBody, InlineExercise, |
+| Vocabulary/Flashcard, Notes, Saved, Practice (mock), AppShell|
++------------------------------+-------------------------------+
+                               |
+                               v
++--------------------------------------------------------------+
+| Controller                                                   |
+|--------------------------------------------------------------|
+| Next.js App Router pages + Route Handlers:                    |
+|   /api/lesson/visit, /api/exercise/submit,                   |
+|   /api/exercise/complete-scroll                              |
+| AuthGate (client auth guard), lib/auth.ts, lib/graphql.ts    |
+| Payload REST/GraphQL + admin route handlers (apps/cms)       |
++------------------------------+-------------------------------+
+                               |
+                               v
++--------------------------------------------------------------+
+| Model  (Payload collections + Postgres tables)               |
+|--------------------------------------------------------------|
+| Learner, LessonProgress, QuestionSetAttempt                  |
+| Level, Unit, Lesson, QuestionSet (+question blocks),         |
+| Vocabulary, Media, users (admin)                             |
++--------------------------------------------------------------+
 
-Flow:
-  View -> Controller -> Model -> Controller -> View
+Flow:  View -> (page / API route) -> Payload model -> response -> View
 ```
 
 ### 2.2 Layered Architecture
 
 ```text
-+------------------------------------------------------+
-| Presentation Layer                                   |
-| React components, pages, layouts, forms, UI states    |
-+--------------------------+---------------------------+
-                           |
-                           v
-+------------------------------------------------------+
-| Controller / API Layer                               |
-| Routes, request validation, auth checks, responses    |
-+--------------------------+---------------------------+
-                           |
-                           v
-+------------------------------------------------------+
-| Application Service Layer                            |
-| AuthService, LessonService, ProgressService,          |
-| ExerciseService, NoteService, DictationService        |
-+--------------------------+---------------------------+
-                           |
-            +--------------+--------------+
-            |                             |
-            v                             v
-+--------------------------+   +--------------------------+
-| Domain Layer             |   | Repository Layer         |
-| Progress rules, scoring, |   | UserRepository,          |
-| guest limits, publishing |   | ContentRepository,       |
-| rules                    |   | ProgressRepository, etc. |
-+--------------------------+   +------------+-------------+
++------------------------------------------------------------------+
+| Presentation Layer  (apps/web)                                   |
+|  Pages, layouts, shadcn/ui, feature components, AuthGate/AppShell |
++----------------------------------+-------------------------------+
+                                   v
++------------------------------------------------------------------+
+| API / Controller Layer                                           |
+|  Web Route Handlers (/api/*) for grading + progress writes        |
+|  CMS Route Handlers ((payload)/api, /graphql) auto-generated      |
++----------------------------------+-------------------------------+
+                                   v
++------------------------------------------------------------------+
+| Application / Domain Layer                                        |
+|  Exercise grading (gradeQuestion), progress state transitions,   |
+|  SRS schedule (client vocab-store), dashboard analytics (streak, |
+|  heatmap, Ebbinghaus review), autoSlug + verify hooks (CMS)       |
++----------------------------------+-------------------------------+
+                                   v
++------------------------------------------------------------------+
+| Data Access Layer                                                |
+|  Payload Local/REST/GraphQL API  +  @payloadcms/db-postgres       |
++----------------------------------+-------------------------------+
+                                   v
++------------------------------------------------------------------+
+| Data Layer                                                       |
+|  PostgreSQL 16 (Docker)  +  Payload Media uploads (local)         |
++------------------------------------------------------------------+
+
+Note: No hand-written repository classes — Payload is the data-access abstraction.
+      Cross-cutting: Google OAuth + Resend integrated in CMS layer.
+```
+
+### 2.3 Data-Centered Architecture (Payload as the hub)
+
+```text
+   apps/web clients                          apps/cms (Payload)
+   ----------------                          ------------------
+   lib/graphql.ts  ----- GraphQL query ----> /graphql  ----+
+   lib/auth.ts     ----- REST (learners) --> /api/learners |
+   /api/exercise/* ----- REST (JWT) -------> /api/lesson-  |
+   /api/lesson/*                              progress      |
+                                                            v
+                                          +--------------------------------+
+                                          |   Payload Core (single hub)    |
+                                          |  access control, hooks, drafts,|
+                                          |  localization, auth strategies |
+                                          +----------------+---------------+
+                                                           v
+                              +-------------------------------------------------+
+                              | PostgreSQL 16  (one DB: francaisvn_cms)          |
+                              |  media, levels, units, vocabularies, lessons,    |
+                              |  question_sets, learners, lesson_progress,       |
+                              |  question_set_attempts, users                    |
+                              +-------------------------------------------------+
+
+Every service talks to ONE shared store through Payload; there is no separate
+content store vs. user store (contrast with the old Strapi + Supabase split).
+```
+
+### 2.4 Client–Server (Deployment) Architecture
+
+```text
++----------------------------------------------+
+| Client (Browser)                             |
+|  Learner SPA pages (token in localStorage)   |
+|  Admin panel pages (cookie payload-token)    |
++-----------------+-----------------+----------+
+                  | HTTPS           | HTTPS
+                  v                 v
++--------------------------+  +--------------------------+
+| apps/web  Next.js :3000  |  | apps/cms Payload  :3001  |
+|  - SSR pages             |  |  - /admin UI             |
+|  - /api route handlers   |->|  - /api  (REST)          |
+|    (server-side grading) |  |  - /graphql              |
++--------------------------+  +-------------+------------+
                                             |
                                             v
-                              +----------------------------+
-                              | Data Layer                 |
-                              | Supabase PostgreSQL        |
-                              | Strapi CMS                 |
-                              | Supabase Storage           |
-                              +----------------------------+
+                              +--------------------------+
+                              | PostgreSQL 16 (Docker)   |
+                              |   :5432  francaisvn_cms  |
+                              +--------------------------+
+
+External (from apps/cms): Google OAuth 2.0, Resend email.
+Run locally with: docker compose up -d  &&  pnpm dev  (concurrently web+cms).
 ```
 
-### 2.3 Repository Architecture / Data-Centered Architecture
+### 2.5 Application Architecture: Exercise Grading Pipeline
 
 ```text
-Application Services
-  AuthService
-  LessonService
-  ExerciseService
-  ProgressService
-  NoteService
-  DictationService
-        |
-        v
-Repositories
-  UserRepository
-  ContentRepository
-  ExerciseRepository
-  ProgressRepository
-  NoteRepository
-  AttemptRepository
-        |
-        v
-+--------------------------------------------------+
-| Shared Data Sources                              |
-|--------------------------------------------------|
-| Supabase PostgreSQL                              |
-|   - users, progress, notes, attempts, goals      |
-| Strapi CMS                                       |
-|   - lessons, exercises, questions, publishing    |
-| Supabase Storage                                 |
-|   - dictation and shadowing audio files          |
-+--------------------------------------------------+
-
-Mapping:
-  AuthService      -> UserRepository      -> PostgreSQL
-  LessonService    -> ContentRepository   -> Strapi CMS / PostgreSQL
-  ExerciseService  -> ExerciseRepository  -> Strapi CMS / PostgreSQL
-  ProgressService  -> ProgressRepository  -> PostgreSQL
-  NoteService      -> NoteRepository      -> PostgreSQL
-  DictationService -> ContentRepository   -> Strapi CMS / Storage
-  DictationService -> AttemptRepository   -> PostgreSQL
+Submitted answers (Record<questionId, value>)  +  payload-token cookie
+      |
+      v
+Authenticate
+  - decode JWT payload, require collection == "learners"
+  - extract learnerId
+      |
+      v
+Fetch QuestionSet by slug (Payload REST, with JWT)
+      |
+      v
+Filter to gradable blocks
+  - single_choice, multiple_choice, true_false, fill_blank
+  - (ordering & matching exist in schema but are NOT auto-graded)
+      |
+      v
+Grade each question (gradeQuestion)
+  - single_choice : index == correct option index
+  - multiple_choice: sorted selected idxs == sorted correct idxs
+  - true_false    : answer == correctAnswer
+  - fill_blank    : every blank trim+lowercase == correctText.lowercase
+      |
+      +-----------------------+
+      |                       |
+      v                       v
+Build per-question        Compute score
+details (prompt,          = round(correct/total * 100)
+user vs correct text,
+explanation)
+      |                       |
+      +-----------+-----------+
+                  v
+Upsert LessonProgress -> state = completed (completedAt set)
+                  |
+                  v
+Return { correct, total, score, details, completedLesson }
+(Note: QuestionSetAttempt collection exists but is not written here yet.)
 ```
 
-### 2.4 Client-Server Architecture
-
-```text
-+--------------------------------------------------+
-| Client                                           |
-|--------------------------------------------------|
-| Browser UI                                       |
-| Guest pages, learner pages, admin pages          |
-+--------------------------+-----------------------+
-                           |
-                           | HTTPS
-                           v
-+--------------------------------------------------+
-| Server Side                                      |
-|--------------------------------------------------|
-| Next.js App Server                               |
-| API Routes / Server Actions                      |
-| Business Services                                |
-+--------------------------+-----------------------+
-                           |
-                           v
-+--------------------------------------------------+
-| Managed Services                                 |
-|--------------------------------------------------|
-| Supabase Auth                                    |
-| Supabase PostgreSQL                              |
-| Supabase Storage                                 |
-| Strapi CMS                                       |
-| Email Provider                                   |
-| PostHog Analytics                                |
-| Sentry                                           |
-+--------------------------------------------------+
-```
-
-### 2.5 Application Architecture: Data Processing Pipeline
-
-```text
-User Input Text
-      |
-      v
-Normalize
-  - lowercase
-  - NFC unicode
-  - collapse whitespace
-      |
-      v
-Strip Extra Punctuation
-  - ignore extra , . ? ! ; :
-  - keep French accents
-  - keep hyphens
-      |
-      v
-Tokenize
-  - split by whitespace
-      |
-      v
-Compare Tokens
-      |
-      +--------------------+
-      |                    |
-      v                    v
-Build Diff Highlights   Calculate Score / Accuracy
-      |                    |
-      +----------+---------+
-                 |
-                 v
-Return Feedback
-                 |
-                 v
-Save Attempt
-```
+> Dictation accuracy (normalize → strip punctuation → tokenize → diff → score) exists only as a **frontend mock** (`TokenDiffViewer`, practice pages read `data/index.ts`); it is not yet a server pipeline.
 
 ## 3. Database Models
 
-### 3.1 Entity Relationship Diagram
+### 3.1 Entity Relationship Diagram (actual tables)
 
 ```text
-+------------------+       1      0..1      +------------------+
-| USER             |------------------------>| USER_GOAL        |
-+------------------+                         +------------------+
-| id PK            |                         | user_id PK/FK    |
-| email            |                         | goal             |
-| password_hash    |                         | exam_date        |
-| role             |                         +------------------+
-| created_at       |
-| last_login       |       1      0..*      +------------------+
-+------------------+------------------------>| PROGRESS         |
-        |                                   +------------------+
-        | 1                                 | user_id PK/FK    |
-        |                                   | lesson_id PK/FK  |
-        | 0..*                              | state            |
-        v                                   | last_visited     |
-+------------------+                        | completed_at     |
-| NOTE             |                        +------------------+
-+------------------+
-| id PK            |       1      0..*      +------------------+
-| user_id FK       |------------------------>| EXERCISE_ATTEMPT |
-| lesson_id FK     |                        +------------------+
-| title            |                        | id PK            |
-| body_md          |                        | user_id FK       |
-| created_at       |                        | exercise_id FK   |
-| updated_at       |                        | score            |
-+------------------+                        | total            |
-                                            | duration_sec     |
-                                            | submitted_at     |
-                                            +------------------+
++------------------------+      1     0..*    +--------------------------+
+| learners               |------------------>| lesson_progress          |
++------------------------+                    +--------------------------+
+| id PK                  |                    | id PK                    |
+| email (unique)         |                    | learner_id FK            |
+| hash / salt            |                    | lessonSlug               |
+| displayName            |                    | levelCode                |
+| avatar_id FK -> media  |                    | unitSlug                 |
+| plan / status          |                    | state                    |
+| _verified              |                    | scrollPercent            |
+| _verificationToken     |                    | startedAt/lastVisitedAt  |
+| loginAttempts/lockUntil|                    | completedAt              |
+| sessions               |   1     0..*       +--------------------------+
++-----------+------------+------------------> | question_set_attempts    |
+            |                                 +--------------------------+
+            |                                 | id PK                    |
+            |                                 | learner_id FK            |
+            |                                 | questionSetSlug          |
+            |                                 | lessonSlug               |
+            |                                 | score/total/percent      |
+            |                                 | passed/durationSec       |
+            |                                 | answers (JSONB)          |
+            |                                 | submittedAt              |
+            |                                 +--------------------------+
 
-+------------------+       1      0..*      +------------------+
-| LEVEL            |------------------------>| TOPIC_GROUP      |
-+------------------+                        +------------------+
-| id PK            |                        | id PK            |
-| name             |                        | level_id FK      |
-| order            |                        | name_vi          |
-+------------------+                        | order            |
-                                            +--------+---------+
-                                                     |
-                                                     | 1 to 0..*
-                                                     v
-                                            +------------------+
-                                            | LESSON           |
-                                            +------------------+
-                                            | id PK            |
-                                            | topic_group_id FK|
-                                            | title            |
-                                            | content_md       |
-                                            | order            |
-                                            | status           |
-                                            | is_sample        |
-                                            | published_at     |
-                                            +--------+---------+
-                                                     |
-                  +----------------------------------+----------------------------------+
-                  |                                  |                                  |
-                  v                                  v                                  v
-          +---------------+                  +----------------+                 +---------------+
-          | EXERCISE      |                  | DICTATION      |                 | SHADOWING     |
-          +---------------+                  +----------------+                 +---------------+
-          | id PK         |                  | id PK          |                 | id PK         |
-          | lesson_id FK  |                  | lesson_id FK   |                 | lesson_id FK  |
-          | status        |                  | audio_url      |                 | audio_url     |
-          +-------+-------+                  | transcript     |                 | transcript    |
-                  |                          | duration_sec   |                 +---------------+
-                  | 1 to 1..*                +--------+-------+
-                  v                                   |
-          +---------------+                           | 1 to 0..*
-          | QUESTION      |                           v
-          +---------------+                  +-------------------+
-          | id PK         |                  | DICTATION_ATTEMPT |
-          | exercise_id FK|                  +-------------------+
-          | type          |                  | id PK             |
-          | payload       |                  | user_id FK        |
-          | explanation   |                  | dictation_id FK   |
-          +-------+-------+                  | user_input        |
-                  |                          | accuracy          |
-                  |                          | submitted_at      |
-                  v                          +-------------------+
-     +--------------------------+
-     | EXERCISE_ATTEMPT_ANSWER |
-     +--------------------------+
-     | id PK                    |
-     | attempt_id FK            |
-     | question_id FK           |
-     | answer                   |
-     | is_correct               |
-     +--------------------------+
+CONTENT:
 
-Other table:
-  BOOKMARK(user_id PK/FK, target_type, target_id, created_at)
++-----------------+ 1   0..* +-----------------+ 1   0..* +--------------------------+
+| levels          |-------->| units           |-------->| lessons                  |
++-----------------+         +-----------------+         +--------------------------+
+| id PK           |         | id PK           |         | id PK                    |
+| code (unique)   |         | slug (unique)   |         | slug (unique)            |
+| title (loc)     |         | level_id FK     |         | unit_id FK               |
+| description     |         | title (loc)     |         | title/subtitle/desc(loc) |
+| orderIndex      |         | description     |         | contentMd                |
+| status          |         | orderIndex      |         | lessonType               |
+| accessMode      |         | status          |         | orderIndex/estimatedMin  |
++-----------------+         | accessMode      |         | accessMode/statusInPath  |
+                            +-----------------+         | completionRule           |
+                                                        | _status (draft/pub)      |
+                                                        +-----+------+-------+------+
+                                                              |      |       |
+                       lessons_rels (M:N -> vocabularies)     |      |       | 1  0..*
+                       lessons mediaBlocks[] (array -> media) |      |       v
+                       lessons tags[] (array text)            |      |  +------------------+
+                                                              |      |  | question_sets    |
+                                                              |      |  +------------------+
+                                                              |      |  | id PK            |
++-----------------+                                           |      |  | slug (unique)    |
+| vocabularies    | <-----------------------------------------+      |  | title            |
++-----------------+         (lessons.vocabularies hasMany)           |  | lesson_id FK     |
+| id PK           |                                                  |  | setType          |
+| word            |                                                  |  | passThreshold    |
+| type            |                                                  |  | _status          |
+| ipa             |    +-----------------+                           |  | questions[]:     |
+| meaningVi       |    | media           | <-------------------------+  |  inline blocks   |
+| audio_id FK     |--->+-----------------+   (lessons.mediaBlocks,      +--------+---------+
+| examples[](fr,vi)|   | id PK           |    vocab.audio, q.media)              |
++-----------------+    | alt/filename    |                                       v
+                       | mimeType/url    |          question blocks (NOT a table of their own;
+                       +-----------------+          stored as Payload blocks within question_sets):
+                                                      single_choice | multiple_choice | true_false
++-----------------+                                   fill_blank | ordering | matching
+| users (admin)   |   separate auth collection; cookie payload-token; full CRUD
++-----------------+
+
+Localization: localized fields stored per-locale (vi default, fr, en) by Payload.
 ```
 
 ## 4. Core User Flow Models
 
-### 4.1 Page Map
+### 4.1 Page Map (actual routes)
 
 ```text
-Landing Page
+/  (Landing, public)
   |
-  +--> Guest Dashboard
-  |       |
-  |       +--> Guest Sample Lesson
-  |               |
-  |               +--> Guest Sample Exercise
-  |                       |
-  |                       +--> Sign Up / Sign In
-  |
-  +--> Sign Up / Sign In
-          |
-          +--> Authenticated Dashboard
-          |       |
-          |       +--> Learning Path
-          |       |       |
-          |       |       +--> Lesson Detail
-          |       |
-          |       +--> Lesson Detail
-          |       |       |
-          |       |       +--> Exercise
-          |       |       +--> Dictation Practice
-          |       |       +--> Shadowing Practice
-          |       |
-          |       +--> Notes Page
-          |       +--> Saved Items
-          |       +--> Goal / Countdown Setup
-          |
-          +--> Admin CMS
+  +--> /login        (email/password + register + Google OAuth)
+  +--> /verify        (?token=  email verification)
+  +--> /callback      (?token=  OAuth token receiver)
+            |
+            v   [ AuthGate-protected (app) group, AppShell sidebar ]
+   +-----------------------------------------------------------+
+   | /dashboard        Tổng quan (streak, progress, reviews)   |
+   | /learning-path    Lộ trình (levels -> units -> lessons)   |
+   |       +--> /lessons/[slug]   Lesson detail + InlineExercise|
+   | /practice         Hub (mock)                              |
+   |       +--> /practice/[slug]            -> dictation        |
+   |       +--> /practice/[slug]/dictation  (mock)             |
+   |       +--> /practice/[slug]/shadowing  (mock)             |
+   | /vocabulary       Dictionary + saved (SRS in localStorage)|
+   |       +--> /vocabulary/flashcard  SRS review (mock data)   |
+   | /notes            Notes (mock, not persisted)             |
+   | /saved            Bookmarked lessons/vocab/notes (mock)   |
+   | /chat             "Coming soon" (SoonPage placeholder)    |
+   | /ai-mode          "Coming soon" (SoonPage placeholder)    |
+   +-----------------------------------------------------------+
+
+Admin (separate app): http://localhost:3001/admin  (Payload, users collection)
 ```
 
 ### 4.2 Returning Learner Flow
 
 ```text
-Dashboard
+/dashboard
   |
-  +-- Has unfinished lesson? -- Yes --> Resume latest in-progress lesson
-  |                                      |
-  |                                      v
-  +-- No --> Recommend next lesson --> Lesson Detail
-                                      |
-                                      v
-                              Exercise or Dictation
-                                      |
-                                      v
-                              Update progress
-                                      |
-                                      v
-                              Show next lesson
-                                      |
-                                      v
-                                  Dashboard
+  +-- in_progress lesson exists? -- Yes --> "Continue learning" -> /lessons/[slug]
+  |                                              |
+  +-- No --> next lesson from learning path ----+
+                                                 v
+                                        LessonVisitTracker -> in_progress
+                                                 |
+                          +-- has exercise? -- Yes --> submit -> graded -> completed
+                          |
+                          +-- No --> scroll >= 90% -> complete-scroll -> completed
+                                                 |
+                                                 v
+                                        Back to /dashboard
+                                  (progress %, Ebbinghaus review reminders)
 ```
 
-### 4.3 Quick Note Flow
+### 4.3 Quick Note Flow (current vs. intended)
 
 ```text
-Lesson / Exercise / Dictation
+Lesson page
   |
   v
-Click Quick Note button
+Open QuickNote (slide-over)  [component: QuickNote / feature]
   |
-  +-- First open in session? -- Yes --> Choose create new or select existing
-  |                                      |
-  |                                      +-- Create new --> Create note linked to lesson
-  |                                      |
-  |                                      +-- Select existing --> Load selected note
+  v
+Edit note text
   |
-  +-- No --> Open last active note
-                  |
-                  v
-            Open slide-over panel
-                  |
-                  v
-              Edit note
-                  |
-                  v
-        Autosave after 1 second
-                  |
-                  v
-        Visible on Notes Page
-                  |
-                  v
-        Close panel and return to learning
+  v
+(CURRENT) State held in component only — NOT persisted to backend
+  |
+  v
+(INTENDED) Autosave -> Notes collection per learner -> visible on /notes
+
+Status: Notes are mock data (data/index.ts); no Notes collection exists in CMS yet.
 ```
 
-### 4.4 Dictation Flow
+### 4.4 Dictation Flow (mock)
 
 ```text
-Open dictation practice
+Open /practice/[slug]/dictation
   |
   v
-Play audio
+Play audio  (AudioPlayerMock — no real playback)
   |
   v
 Type transcript
   |
-  +-- Submit empty? -- Yes --> Ask confirmation
-  |                            |
-  |                            v
-  +-- No ----------------> Normalize and tokenize input
-                              |
-                              v
-                       Compare with transcript
-                              |
-                              v
-                       Show token-level diff
-                              |
-                              v
-                       Calculate accuracy
-                              |
-                              v
-                       Save dictation attempt
-                              |
-                              v
-                       Show retry or next lesson CTA
+  v
+Normalize + tokenize + diff   (TokenDiffViewer, client-side)
+  |
+  v
+Show token-level diff + accuracy
+  |
+  v
+(CURRENT) Result not saved — no DictationAttempt collection
+(INTENDED) Persist attempt + audio storage
+
+Status: practice content + audio come from data/index.ts mock; not wired to CMS.
 ```
 
 ### 4.5 Admin Core Flow
 
 ```text
-Admin login
+Login /admin (users collection, cookie auth)
   |
   v
-Admin dashboard
+Create Level -> Unit -> Lesson (autoSlugHook)
   |
   v
-Create lesson
+Add contentMd + Media uploads + Vocabularies + tags
   |
   v
-Create exercise or dictation
+Create QuestionSet with inline question blocks
   |
   v
-Preview learner view
+Save Draft
   |
-  +-- Ready to publish? -- No --> Create lesson / edit content
+  +-- Ready? -- No --> keep editing
   |
-  +-- Yes
-       |
-       v
-Publish
-       |
-       v
-Lesson appears for learners
-       |
-       +-- Need fix? -- Yes --> Unpublish or edit live content --> Preview learner view
-       |
-       +-- No --> Done
+  +-- Yes --> Publish (_status=published)
+                |
+                v
+       Learner GraphQL reads return the lesson
+                |
+                +-- Need fix? -- Yes --> edit -> publish again
+                |
+                +-- No --> Done
 ```
+
+---
+
+## Appendix: What changed from the previous diagram set
+
+| Area | Old draft | Actual francaisvn |
+|------|-----------|-------------------|
+| CMS | Strapi | **Payload CMS 3.8x** (runs on Next.js, port 3001) |
+| Auth | Supabase Auth | **Payload native auth**: `users` (admin, cookie) + `learners` (localStorage JWT) |
+| Sign-in | — | **Google OAuth** custom endpoints + **Resend** email verification |
+| DB | Supabase Postgres | **PostgreSQL 16 via Docker** (`francaisvn_cms`) |
+| Storage | Supabase Storage | **Payload Media** uploads (local) |
+| Observability | PostHog + Sentry | **none implemented** |
+| Hosting | Vercel | **local dev only** (no deploy config in repo) |
+| Content model | TopicGroup, separate Question/Dictation/Shadowing tables | **Level → Unit → Lesson → QuestionSet**; questions are **inline blocks** (6 types); dictation/shadowing are frontend mocks |
+| Guest trial | guest dashboard + progress merge | **not implemented** (landing is public; app routes require login) |
+| Progress | NotStarted/InProgress/Completed records | **in_progress / completed** only; "Mới" = no record |
+| Grading | generic | **server-side** in `/api/exercise/submit`, 4 gradable types |
+| Attempts | ExerciseAttempt + answers written | `QuestionSetAttempt` **collection exists but web does not write it yet** |
+| Notes/SRS | DB-backed | **Notes mock**, **Vocab SRS + Goal in localStorage** |
+| Layers | hand-written Repositories | **Payload is the data-access layer** (no custom repo classes) |
+</content>
+</invoke>

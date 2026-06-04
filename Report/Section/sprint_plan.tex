@@ -2,97 +2,187 @@
 
 \subsection{Sprint Overview}
 
+The project was delivered in three completed phases followed by two planned phases. Each phase had a clear theme and a shippable outcome. Phases 1--3 are complete as of 2026-06-03.
+
 \begin{table}[H]
 \centering
-\begin{tabularx}{\linewidth}{c X X X}
+\begin{tabularx}{\linewidth}{c c X X c}
 \toprule
-Sprint & Theme & Outcome & Demo-able \\
+Phase & Date & Theme & Outcome & Status \\
 \midrule
-1 & Core Learning Loop & Register, dashboard, lesson, exercise, progress & Internal alpha \\
-2 & Notes, Dictation, Funnel & Quick Note, Notes Page, Dictation, Guest Trial, OAuth, Bookmark, Onboarding & Closed beta \\
-3 & Retention and Skill Practice & Shadowing, Saved Mistakes, Streak, polish & Public MVP launch \\
-4+ & Exam Preparation & Mock Test, Timer, Placement Test & Phase 2 \\
+1 & 2026-05-25 & Foundation \& CMS Schema & Monorepo setup, UI scaffold, all 9 Payload collections defined, seed data & Done \\
+2 & 2026-05-27 & Auth \& Identity & Learner auth (email + Google OAuth + Resend), runtime collections, access control & Done \\
+3 & 2026-06-03 & Learning Engine & Exercise grading, progress state machine, real dashboard analytics, learning path from live data & Done \\
+4 & -- & Content Features Backend & Vocabulary SRS, Notes persistence, Practice/Dictation backend, Discussion & Planned \\
+5 & -- & Future Phases & Chat community, AI mode, mock exams, placement test, advanced analytics & Later \\
 \bottomrule
 \end{tabularx}
 \caption{Sprint overview}
 \end{table}
 
-\subsection{Sprint 1: Core Learning Loop}
+\subsection{Phase 1: Foundation and CMS Schema}
+\label{sec:phase1}
 
-The goal of Sprint 1 is to deliver the learner happy path with email authentication and admin content creation.
+\textbf{Goal.} Establish the monorepo, migrate the UI from TanStack Start to Next.js App Router, define the full Payload CMS content schema, and produce working mock-data-driven screens so the product shape is visible end-to-end.
 
-\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.42\linewidth} p{0.12\linewidth} p{0.1\linewidth}}
-\caption{Sprint 1 backlog}\\
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.50\linewidth} p{0.10\linewidth} p{0.06\linewidth}}
+\caption{Phase 1 backlog}\\
 \toprule
-\# & Epic & Story & Estimate & Owner \\
+\# & Epic & Deliverable & Points & Done \\
 \midrule
 \endhead
-S1-01 & Auth & Register and login with email/password & 5 & BE \\
-S1-02 & Auth & Reset password flow & 3 & BE \\
-S1-03 & Auth & Logout and session expiry & 2 & FE \\
-S1-04 & Auth & Separate admin login & 3 & BE \\
-S1-05 & Data & Schema for user, lesson, exercise, question, progress, attempts & 5 & BE \\
-S1-06 & Data & Seed 5 lessons and 5 exercises & 2 & BE \\
-S1-07 & Admin & CRUD lesson with editor and preview & 8 & BE+FE \\
-S1-08 & Admin & CRUD exercise: MC, true/false, fill & 8 & BE+FE \\
-S1-09 & Admin & Publish/unpublish state machine & 3 & BE \\
-S1-10 & Admin & Level, topic group, reorder management & 5 & BE+FE \\
-S1-11 & Dashboard & Continue learning card states & 5 & FE \\
-S1-12 & Dashboard & Basic progress and links & 3 & FE \\
-S1-13 & Learning Path & Show grouped lessons and statuses & 8 & FE \\
-S1-14 & Learning Path & Highlight next lesson and allow free navigation & 3 & FE \\
-S1-15 & Lesson & Markdown, callouts, CTAs & 5 & FE \\
-S1-16 & Lesson & Auto-mark in-progress, breadcrumb, responsive layout & 3 & FE \\
-S1-17 & Exercise & Render MC, true/false, fill & 5 & FE \\
-S1-18 & Exercise & Feedback, result, retry & 5 & FE+BE \\
-S1-19 & Exercise & Fill compare rules & 3 & BE \\
-S1-20 & Progress & Save lesson state, attempts, level percentage & 5 & BE \\
-S1-21 & Infra & Vercel, Supabase, Strapi setup & 5 & BE \\
-S1-22 & Infra & Sentry and analytics scaffolding & 3 & BE \\
-S1-23 & QA & E2E happy path & 3 & QA \\
+P1-01 & Infra & pnpm monorepo with \texttt{apps/web} + \texttt{apps/cms}; Docker Compose PostgreSQL 16 & 3 & \checkmark \\
+P1-02 & Infra & Concurrent dev scripts; Tailwind v4 theme (brand colours, card-friendly, lesson-prose) & 2 & \checkmark \\
+P1-03 & CMS & Payload CMS v3 bootstrapped on Next.js; PostgreSQL adapter; \texttt{users} admin collection & 3 & \checkmark \\
+P1-04 & CMS & Content collections: Media, Levels, Units, Vocabularies, Lessons, QuestionSets & 8 & \checkmark \\
+P1-05 & CMS & Questions as inline Payload Blocks (6 types: single\_choice, multiple\_choice, true\_false, fill\_blank, ordering, matching) & 5 & \checkmark \\
+P1-06 & CMS & Auto-slug hook on Units, Lessons, QuestionSets & 2 & \checkmark \\
+P1-07 & CMS & Draft / publish workflow on Lessons and QuestionSets & 2 & \checkmark \\
+P1-08 & CMS & Localisation: vi (default), fr, en on title and description fields & 3 & \checkmark \\
+P1-09 & CMS & Seed script with comprehensive mock dataset (2 levels, 2 units, 4 vocab, 3 lessons, 1 question set covering all 6 block types) & 3 & \checkmark \\
+P1-10 & Frontend & Route groups: \texttt{(auth)} (login, verify, callback) and \texttt{(app)} (all authenticated pages) & 3 & \checkmark \\
+P1-11 & Frontend & AppShell: collapsible sidebar, top bar, responsive mobile layout & 5 & \checkmark \\
+P1-12 & Frontend & Landing page (public) & 2 & \checkmark \\
+P1-13 & Frontend & Dashboard UI (mock data) & 3 & \checkmark \\
+P1-14 & Frontend & Learning Path UI: level switcher, topic filter, lesson timeline (mock) & 5 & \checkmark \\
+P1-15 & Frontend & Lesson Detail: markdown rendering, media blocks, callouts (mock) & 5 & \checkmark \\
+P1-16 & Frontend & Practice Hub: series list, type filters (mock); Dictation UI with AudioPlayerMock and TokenDiffViewer; Shadowing UI (mock recording) & 8 & \checkmark \\
+P1-17 & Frontend & Vocabulary: dictionary search, saved-words list, SRS flashcard (localStorage) & 5 & \checkmark \\
+P1-18 & Frontend & Notes page (mock); Saved Items (mock) & 3 & \checkmark \\
+P1-19 & Frontend & 44 shadcn/ui components; 7 feature components (Badges, Callout, StreakHeatmap, QuickNote, AudioPlayerMock, TokenDiffViewer, SoonPage) & 5 & \checkmark \\
 \bottomrule
 \end{longtable}
 
-\subsection{Sprint 2: Notes, Dictation, and Funnel}
+\subsection{Phase 2: Authentication and Identity}
+\label{sec:phase2}
 
-The goal of Sprint 2 is to enable the product differentiators and conversion funnel.
+\textbf{Goal.} Replace all mock auth with production-grade Payload learner authentication, add Google OAuth, email verification, and the three runtime collections that record learner state.
 
-\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.42\linewidth} p{0.12\linewidth} p{0.1\linewidth}}
-\caption{Sprint 2 backlog}\\
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.50\linewidth} p{0.10\linewidth} p{0.06\linewidth}}
+\caption{Phase 2 backlog}\\
 \toprule
-\# & Epic & Story & Estimate & Owner \\
+\# & Epic & Deliverable & Points & Done \\
 \midrule
 \endhead
-S2-01 & Auth & Google OAuth & 5 & BE \\
-S2-02 & Guest Trial & Landing CTA and guest dashboard & 5 & FE \\
-S2-03 & Guest Trial & Guest lesson and sample exercise & 5 & FE \\
-S2-04 & Guest Trial & Soft banner and hard modal limit & 5 & FE \\
-S2-05 & Guest Trial & Local progress and merge on register & 5 & BE+FE \\
-S2-06 & Guest Trial & CMS sample flag & 2 & BE \\
-S2-07 & Quick Note & Floating button and slide-over & 5 & FE \\
-S2-08 & Quick Note & CRUD notes and lesson linking & 5 & FE+BE \\
-S2-09 & Quick Note & Autosave and basic rich text & 5 & FE \\
-S2-10 & Quick Note & Hide note in mock test placeholder & 2 & FE \\
-S2-11 & Notes Page & List, search, filter by lesson & 5 & FE+BE \\
-S2-12 & Dictation & Schema, admin CRUD, audio upload & 8 & BE+FE \\
-S2-13 & Dictation & Learner audio player and input UI & 5 & FE \\
-S2-14 & Dictation & Token diff, highlight, result & 8 & BE+FE \\
-S2-15 & Dictation & Save attempt and progress update & 3 & BE \\
-S2-16 & Bookmark & Bookmark lesson/question and Saved Items page & 5 & FE+BE \\
-S2-17 & Onboarding & Goal modal and user goal schema & 5 & FE+BE \\
-S2-18 & Countdown & Exam date and dashboard card & 3 & FE+BE \\
-S2-19 & Dashboard & Recent activity and Saved Items link & 3 & FE \\
-S2-20 & QA & E2E guest to register, note, dictation & 3 & QA \\
+P2-01 & Auth & \texttt{Learners} collection with Payload \texttt{auth: true}, email verification, plan / status fields & 5 & \checkmark \\
+P2-02 & Auth & Google OAuth custom endpoints (\texttt{/api/learners/oauth/google} and callback); auto create-or-find learner; jwtSign token & 8 & \checkmark \\
+P2-03 & Auth & Resend email adapter; Vietnamese-branded verification email template & 3 & \checkmark \\
+P2-04 & Auth & Access control: \texttt{users} (admin) full CRUD; \texttt{learners} restricted to own profile & 3 & \checkmark \\
+P2-05 & Auth & \texttt{overrideAccess: true} on OAuth find/create/update calls to bypass learner self-restriction & 2 & \checkmark \\
+P2-06 & Frontend & Login page: email/password register + login tabs, Google OAuth button & 5 & \checkmark \\
+P2-07 & Frontend & \texttt{/verify?token=} page: calls Payload verify endpoint & 2 & \checkmark \\
+P2-08 & Frontend & \texttt{/callback?token=} page: saves JWT to localStorage, redirects to dashboard & 2 & \checkmark \\
+P2-09 & Frontend & AuthGate component: blocks \texttt{(app)} layout until \texttt{/api/learners/me} resolves; prevents UI flicker & 5 & \checkmark \\
+P2-10 & Frontend & Auth helpers: \texttt{getToken}, \texttt{setToken}, \texttt{clearToken}, \texttt{fetchWithAuth}, \texttt{getMe} (with OAuth-me fallback) & 3 & \checkmark \\
+P2-11 & Frontend & Dashboard wired to real user: \texttt{useAuth()} from AuthGate context; logout clears localStorage & 2 & \checkmark \\
+P2-12 & CMS & Runtime collections: \texttt{Learners}, \texttt{LessonProgress}, \texttt{QuestionSetAttempts} & 5 & \checkmark \\
+P2-13 & CMS & \texttt{LessonProgress} uniqueness: beforeChange hook rejects duplicate (learner, lessonSlug) create & 3 & \checkmark \\
+P2-14 & CMS & CORS and CSRF origin allow-list for \texttt{http://localhost:3000} & 2 & \checkmark \\
+P2-15 & Frontend & GraphQL fetcher: isomorphic, injects JWT on client, forwards cookies on server; IPv4 fallback for SSR & 5 & \checkmark \\
 \bottomrule
 \end{longtable}
 
-\subsection{Sprint 3 and Phase 2}
+\subsection{Phase 3: Learning Engine and Dashboard Analytics}
+\label{sec:phase3}
 
-Sprint 3 focuses on Shadowing, Saved Mistakes, Streak, performance, accessibility, SEO, error states, analytics, content production, regression testing, and public launch preparation. Phase 2 includes mock tests, real exam timer, placement test, AI correction, payment, and community features after MVP validation.
+\textbf{Goal.} Replace all remaining mock data in the core learning loop with live Payload data; implement server-side exercise grading; build the full progress state machine; wire dashboard with real computed analytics.
+
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.50\linewidth} p{0.10\linewidth} p{0.06\linewidth}}
+\caption{Phase 3 backlog}\\
+\toprule
+\# & Epic & Deliverable & Points & Done \\
+\midrule
+\endhead
+P3-01 & Content & Public \texttt{read} access on Lessons, Levels, Units (Payload defaults to admin-only with draft versioning enabled) & 2 & \checkmark \\
+P3-02 & Learning Path & \texttt{LearningPathView} fetches levels/units/lessons via GraphQL; progress tags (Mới / Đang học / Hoàn thành) from real progressMap & 5 & \checkmark \\
+P3-03 & Lesson & \texttt{LessonBody} fetches lesson + question sets via GraphQL queries & 5 & \checkmark \\
+P3-04 & Progress & \texttt{LessonVisitTracker}: invisible client component fires POST \texttt{/api/lesson/visit} once on mount; creates or updates LessonProgress & 3 & \checkmark \\
+P3-05 & Progress & \texttt{LessonCompletionBanner}: scroll tracker at 90\%; POST \texttt{/api/exercise/complete-scroll}; shows green banner on completion & 3 & \checkmark \\
+P3-06 & Exercise & \texttt{InlineExercise}: embedded exercise engine in lesson page (not a separate route); carousel of question cards; review modal & 8 & \checkmark \\
+P3-07 & Exercise & POST \texttt{/api/exercise/submit}: server-side grading for MC, true/false, fill-blank, matching; upserts LessonProgress to completed; returns per-question detail & 8 & \checkmark \\
+P3-08 & Dashboard & \texttt{DashboardView} fully wired: progress \%, continue-learning card, streak, 84-day heatmap, Ebbinghaus review reminders (1/3/7/30 day intervals, forget-risk labels) & 8 & \checkmark \\
+P3-09 & Dashboard & Practice-time estimate: lesson visits today $\times$ 5 minutes (MVP approximation) & 1 & \checkmark \\
+P3-10 & Dashboard & Goal setting popup: \texttt{GoalSettingPopup} with \texttt{useGoal} hook; persists to localStorage (key \texttt{francais\_goal}) & 3 & \checkmark \\
+P3-11 & Dashboard & \texttt{Lessons.totalDocs} included in GraphQL query to compute overall progress percentage & 1 & \checkmark \\
+P3-12 & Bug fixes & \texttt{gradeQuestion} fill-blank placeholder-key normalisation; completedLesson flag logic; duplicate action buttons removed from InlineExercise & 2 & \checkmark \\
+\bottomrule
+\end{longtable}
+
+\subsection{Phase 4: Content Features Backend (Planned)}
+\label{sec:phase4}
+
+\textbf{Goal.} Wire the remaining UI-complete features to a real backend so that vocabulary SRS, notes, and practice data survive across devices and sessions.
+
+\begin{longtable}{p{0.08\linewidth} p{0.16\linewidth} p{0.50\linewidth} p{0.10\linewidth}}
+\caption{Phase 4 planned backlog}\\
+\toprule
+\# & Epic & Deliverable & Points \\
+\midrule
+\endhead
+P4-01 & Vocabulary & Saved-words collection in CMS; migrate vocab-store from localStorage to server & 8 \\
+P4-02 & Vocabulary & Server-side SRS scheduler: due-date calculation, review queue API & 5 \\
+P4-03 & Notes & Notes collection in CMS (learner-scoped); CRUD endpoints; autosave from QuickNote panel & 8 \\
+P4-04 & Notes & Notes page: live list, search by title/body, filter by lesson & 5 \\
+P4-05 & Saved & Bookmark collection; toggle bookmark on lessons and vocabulary; Saved Items page from real data & 5 \\
+P4-06 & Practice & PracticeItems collection in CMS (audio URL, transcript, series); admin CRUD & 5 \\
+P4-07 & Dictation & Real audio playback (replace AudioPlayerMock); DictationAttempt persistence & 8 \\
+P4-08 & Shadowing & Web Audio API recording; ShadowingAttempt persistence & 8 \\
+P4-09 & Progress & QuestionSetAttempt writes on exercise submit (history and retry tracking) & 3 \\
+P4-10 & Progress & DB-level compound unique index on (learner\_id, lessonSlug) in LessonProgress & 2 \\
+P4-11 & Auth & Goal fields on Learners collection; migrate goal from localStorage & 3 \\
+P4-12 & Discussion & Comments collection; list and post replies on lesson page & 8 \\
+P4-13 & Exercise & Auto-grading for ordering and matching question types & 3 \\
+P4-14 & Auth & Forgot-password / reset-password flow (reset-password page exists, backend endpoint pending) & 3 \\
+P4-15 & Auth & Refresh token or sliding session expiry & 3 \\
+\bottomrule
+\end{longtable}
+
+\subsection{Phase 5: Future Phases}
+\label{sec:phase5}
+
+Phase 5 covers post-MVP features that depend on Phase 4 being stable. These are out of current scope.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X}
+\toprule
+Feature & Dependency \\
+\midrule
+Chat community (real-time messaging) & Auth + moderation infrastructure \\
+AI Mode (conversation, correction, path suggestion) & External AI API integration \\
+Mock exam with timer & Full exercise collection including ordering/matching grading \\
+DELF/TCF placement test & Certified question bank \\
+Practice-time tracking with real duration & ActivityLog collection \\
+Streak server persistence (not localStorage) & Goal fields on Learners \\
+\bottomrule
+\end{tabularx}
+\caption{Phase 5 feature list}
+\end{table}
 
 \subsection{Critical Path and Risks}
 
-The critical path begins with the database schema and content management model. Admin lesson creation enables the learning path, lesson UI, exercise flow, and progress tracking. Dictation depends on the audio upload pattern established in admin content management. Shadowing depends on the audio and browser media patterns validated in Sprint 2.
+\paragraph{Critical Path (completed phases).}
+Phase 1 unblocked everything: the Payload collections, migrations, and seed data had to exist before any real data could flow. Phase 2 (auth) unblocked Phase 3 (progress tracking), because writing LessonProgress requires an authenticated learner identity. Phase 3 grading depends on Phase 1 question blocks being correctly structured.
 
-Major risks include unresolved technology stack decisions, audio upload complexity, MediaRecorder compatibility on iOS Safari, slow content production, and confusing text comparison rules for dictation.
+\paragraph{Critical Path (Phase 4).}
+The Vocabulary SRS backend and Notes persistence are independent of each other and can be parallelised. Dictation audio depends on establishing the Media upload pattern already proven in Phase 1. Discussion depends on the Learners collection being stable (Phase 2, done).
 
+\paragraph{Known Risks and Technical Debt.}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X X X}
+\toprule
+Risk & Location & Mitigation \\
+\midrule
+Application-level uniqueness race condition & LessonProgress beforeChange hook & Add DB-level compound unique index (P4-10) \\
+Token read inconsistency (cookie vs localStorage) & exercise/submit reads cookie; graphql fetcher reads localStorage & Standardise to one strategy; document the dual-token pattern \\
+ordering \& matching not graded & gradeQuestion in exercise/submit & Extend gradeQuestion in Phase 4 (P4-13) \\
+QuestionSetAttempt not written & exercise/submit route & Add write call alongside LessonProgress update (P4-09) \\
+localStorage data lost on device switch & vocab-store, goal & Phase 4 server migration \\
+No error boundaries in frontend & apps/web & Add React error boundary components \\
+No automated tests & Both apps & Add unit tests for gradeQuestion; E2E for auth and exercise flows \\
+\bottomrule
+\end{tabularx}
+\caption{Known risks and technical debt}
+\end{table}
